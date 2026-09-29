@@ -2662,6 +2662,12 @@ async function handleWhatsAppWebhook(request, env2) {
       return new Response("OK", { status: 200 });
     }
     
+    // 3. ¿Es el DUEÑO del negocio? (su phone coincide con tenant.whatsapp_number)
+    const ownerPhone = (tenant.whatsapp_number || "").replace(/[^0-9]/g, "");
+    if (ownerPhone && phone === ownerPhone) {
+      return await handleOwnerCommand(env2, body, tenant, phone);
+    }
+    
     // Extraer texto (puede venir en conversation o extendedTextMessage.text)
     const msg = data.message || {};
     let text = "";
@@ -4097,6 +4103,161 @@ async function loadDefaultServices(env2, tenantId, rubro) {
   }
 }
 __name(loadDefaultServices, "loadDefaultServices");
+
+
+// ============================================================
+// COMANDOS DEL DUEÑO DEL NEGOCIO (tenant owner)
+// El dueño escribe a su propio WhatsApp y el bot responde
+// ============================================================
+async function handleOwnerCommand(env2, body, tenant, phone) {
+  try {
+    const data = body.data || {};
+    const msg = data.message || {};
+    let text = "";
+    if (msg.conversation) text = msg.conversation;
+    else if (msg.extendedTextMessage && msg.extendedTextMessage.text) text = msg.extendedTextMessage.text;
+    
+    text = (text || "").trim();
+    if (!text) return new Response("OK", { status: 200 });
+    
+    // Solo procesar si parece un comando (empieza con mayúscula o palabra clave)
+    const parts = text.toUpperCase().split(/\s+/);
+    const cmd = parts[0].replace(/[.:!]+$/, "");
+    const arg = parts[1]?.toLowerCase() || "";
+    const tenantId = tenant.id;
+    const tenantName = tenant.business_name;
+    
+    const OWNER_COMMANDS = ["PAUSAR","PAUSA","REACTIVAR","ACTIVAR","REANUDAR","BL","BLOQUEAR","BLOQ","DESB","DESBLOQUEAR","UNBL","ESTADO","STATUS","AYUDA","HELP"];
+    
+    if (!OWNER_COMMANDS.includes(cmd)) {
+      return new Response("OK", { status: 200 });
+    }
+    
+    let reply = "";
+    const instanceName = tenant.evolution_instance || env2.EVOLUTION_INSTANCE_NAME;
+    
+    if (cmd === "PAUSAR" || cmd === "PAUSA") {
+      if (arg) {
+        // Pausar número específico
+        const num = arg.replace(/[^0-9]/g, "");
+        const conv = await env2.DB.prepare(
+          "SELECT id, contact_name FROM sgc_cit_WhatsApp_conversations WHERE phone = ? AND tenant_id = ?"
+        ).bind(num, tenantId).first();
+        if (conv) {
+          await env2.DB.prepare("UPDATE sgc_cit_WhatsApp_conversations SET status = 'paused' WHERE id = ?").bind(conv.id).run();
+          reply = `⏸️ Bot pausado para ${num} (${conv.contact_name || "sin nombre"}).\n\nPara reactivar: REACTIVAR ${num}`;
+        } else {
+          reply = `❌ No hay conversación con ${num}.`;
+        }
+      } else {
+        // Pausar todo el bot de este tenant
+        await env2.DB.prepare(
+          "INSERT OR REPLACE INTO sgc_cit_config (tenant_id, clave, valor) VALUES (?, 'bot_paused', 'true')"
+        ).bind(tenantId).run();
+        reply = `⏸️ *Bot pausado para ${tenantName}*\n\nNo responderé a ningún mensaje nuevo.\n\nPara reactivar: REACTIVAR`;
+      }
+    } else if (cmd === "REACTIVAR" || cmd === "ACTIVAR" || cmd === "REANUDAR") {
+      if (arg) {
+        const num = arg.replace(/[^0-9]/g, "");
+        const conv = await env2.DB.prepare(
+          "SELECT id FROM sgc_cit_WhatsApp_conversations WHERE phone = ? AND tenant_id = ?"
+        ).bind(num, tenantId).first();
+        if (conv) {
+          await env2.DB.prepare("UPDATE sgc_cit_WhatsApp_conversations SET status = 'active' WHERE id = ?").bind(conv.id).run();
+          reply = `✅ Bot reactivado para ${num}.`;
+        } else {
+          reply = `❌ No hay conversación con ${num}.`;
+        }
+      } else {
+        await env2.DB.prepare(
+          "INSERT OR REPLACE INTO sgc_cit_config (tenant_id, clave, valor) VALUES (?, 'bot_paused', 'false')"
+        ).bind(tenantId).run();
+        reply = `✅ *Bot reactivado para ${tenantName}*\n\nVolveré a responder todos los mensajes.`;
+      }
+    } else if (cmd === "BL" || cmd === "BLOQUEAR" || cmd === "BLOQ") {
+      if (!arg) {
+        reply = `❌ Falta el número.\n\nUso: *BL <numero>*\nEjemplo: *BL 56912345678*`;
+      } else {
+        const num = arg.replace(/[^0-9]/g, "");
+        const conv = await env2.DB.prepare(
+          "SELECT id, contact_name FROM sgc_cit_WhatsApp_conversations WHERE phone = ? AND tenant_id = ?"
+        ).bind(num, tenantId).first();
+        if (conv) {
+          await env2.DB.prepare("UPDATE sgc_cit_WhatsApp_conversations SET status = 'blocked' WHERE id = ?").bind(conv.id).run();
+          reply = `🚫 *Número bloqueado*\n\n📞 ${num} (${conv.contact_name || "sin nombre"})\n\nNo responderé a este número.\n\nPara desbloquear: DESB ${num}`;
+        } else {
+          await env2.DB.prepare(
+            "INSERT INTO sgc_cit_WhatsApp_conversations (phone, contact_name, status, tenant_id) VALUES (?, ?, 'blocked', ?)"
+          ).bind(num, "Bloqueado", tenantId).run();
+          reply = `🚫 *Número bloqueado*\n\n📞 ${num}\n\nSi escribe, no responderé.\n\nPara desbloquear: DESB ${num}`;
+        }
+      }
+    } else if (cmd === "DESB" || cmd === "DESBLOQUEAR" || cmd === "UNBL") {
+      if (!arg) {
+        reply = `❌ Falta el número.\n\nUso: *DESB <numero>*`;
+      } else {
+        const num = arg.replace(/[^0-9]/g, "");
+        const conv = await env2.DB.prepare(
+          "SELECT id FROM sgc_cit_WhatsApp_conversations WHERE phone = ? AND tenant_id = ?"
+        ).bind(num, tenantId).first();
+        if (conv) {
+          await env2.DB.prepare("UPDATE sgc_cit_WhatsApp_conversations SET status = 'active' WHERE id = ?").bind(conv.id).run();
+          reply = `✅ *Número desbloqueado*\n\n📞 ${num}\n\nVolveré a responder a este número.`;
+        } else {
+          reply = `❌ No se encontró ${num}.`;
+        }
+      }
+    } else if (cmd === "ESTADO" || cmd === "STATUS") {
+      const pausedConfig = await env2.DB.prepare(
+        "SELECT valor FROM sgc_cit_config WHERE tenant_id = ? AND clave = 'bot_paused'"
+      ).bind(tenantId).first();
+      const isPaused = pausedConfig?.valor === "true";
+      
+      const blockedList = await env2.DB.prepare(
+        "SELECT phone, contact_name, status FROM sgc_cit_WhatsApp_conversations WHERE tenant_id = ? AND status IN ('paused','blocked') ORDER BY status, phone"
+      ).bind(tenantId).all();
+      const allList = blockedList.results || [];
+      const pausedList = allList.filter(c => c.status === "paused");
+      const blockedOnlyList = allList.filter(c => c.status === "blocked");
+      
+      reply = `📊 *Estado de ${tenantName}*\n\n`;
+      reply += `Bot: ${isPaused ? "⏸️ PAUSADO" : "✅ Activo"}\n\n`;
+      if (pausedList.length > 0) {
+        reply += `⏸️ Pausados (${pausedList.length}):\n`;
+        for (const c of pausedList) { reply += `• ${c.phone} (${c.contact_name || "?"})\n`; }
+        reply += "\n";
+      }
+      if (blockedOnlyList.length > 0) {
+        reply += `🚫 Bloqueados (${blockedOnlyList.length}):\n`;
+        for (const c of blockedOnlyList) { reply += `• ${c.phone} (${c.contact_name || "?"})\n`; }
+        reply += "\n";
+      }
+      if (pausedList.length === 0 && blockedOnlyList.length === 0) {
+        reply += `Sin números pausados ni bloqueados.`;
+      }
+    } else if (cmd === "AYUDA" || cmd === "HELP") {
+      reply = `🤖 *Comandos de ${tenantName}*\n\n`;
+      reply += `*PAUSAR* - Pausar el bot (no responde nadie)\n`;
+      reply += `*PAUSAR <numero>* - Pausar un número\n`;
+      reply += `*REACTIVAR* - Reactivar el bot\n`;
+      reply += `*REACTIVAR <numero>* - Reactivar un número\n`;
+      reply += `*BL <numero>* - Bloquear un número\n`;
+      reply += `*DESB <numero>* - Desbloquear un número\n`;
+      reply += `*ESTADO* - Ver estado del bot\n`;
+      reply += `*AYUDA* - Ver esta ayuda\n\n`;
+      reply += `Escribe estos comandos en este chat para controlar tu bot.`;
+    }
+    
+    if (reply) {
+      await enviarWhatsAppEvolution(env2, phone, reply);
+    }
+    return new Response("OK", { status: 200 });
+  } catch (error) {
+    console.error("Error en handleOwnerCommand:", error);
+    return new Response("OK", { status: 200 });
+  }
+}
+__name(handleOwnerCommand, "handleOwnerCommand");
 
 export {
   index_default as default
