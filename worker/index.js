@@ -2625,7 +2625,19 @@ async function handleWhatsAppWebhook(request, env2) {
     const data = body.data || {};
     const key = data.key || {};
     
-    // Ignorar mensajes propios del bot
+    // ===== CHECK DE DUEÑO (antes de fromMe) =====
+    // Si el mensaje viene del dueño del negocio (incluso fromMe=true), procesar como comando
+    const remoteJid = key.remoteJid || "";
+    if (remoteJid.includes("@s.whatsapp.net")) {
+      const ownerPhone = (tenant.whatsapp_number || "").replace(/[^0-9]/g, "");
+      const ownerPhoneCheck = remoteJid.replace("@s.whatsapp.net", "");
+      if (ownerPhone && ownerPhoneCheck === ownerPhone && key.fromMe === true) {
+        console.log(`OWNER DETECTED: ${ownerPhoneCheck} es dueño de tenant ${tenant?.id}`);
+        return await handleOwnerCommand(env2, body, tenant, ownerPhoneCheck);
+      }
+    }
+    
+    // Ignorar mensajes propios del bot (excepto si ya fue procesado como owner arriba)
     if (key.fromMe === true) {
       return new Response("OK", { status: 200 });
     }
@@ -2662,11 +2674,6 @@ async function handleWhatsAppWebhook(request, env2) {
       return new Response("OK", { status: 200 });
     }
     
-    // 3. ¿Es el DUEÑO del negocio? (su phone coincide con tenant.whatsapp_number)
-    const ownerPhone = (tenant.whatsapp_number || "").replace(/[^0-9]/g, "");
-    if (ownerPhone && phone === ownerPhone) {
-      return await handleOwnerCommand(env2, body, tenant, phone);
-    }
     
     // Extraer texto (puede venir en conversation o extendedTextMessage.text)
     const msg = data.message || {};
