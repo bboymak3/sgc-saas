@@ -2177,12 +2177,14 @@ async function handleWhatsAppWebhook(request, env2) {
     const tenant = await resolveTenantForWebhook(env2, body, requestUrl);
     
     // Si es admin (tu WhatsApp), ejecutar comando admin
+    // (antes de verificar event, porque el admin puede mandar cualquier evento)
     if (tenant && tenant.is_admin) {
       return await handleAdminCommand(env2, body);
     }
     
-    // Evolution API v2 format
-    if (body.event !== "messages.upsert") {
+    // Evolution API v2 format - ser tolerante con el event
+    const evt = (body.event || "").toLowerCase();
+    if (evt !== "messages.upsert" && evt !== "message_received" && evt !== "messages.create") {
       return new Response("OK", { status: 200 });
     }
     
@@ -3183,6 +3185,10 @@ async function handleAdminCommand(env2, body) {
           reply += `• *${t.slug}*\n  ${t.business_name} | ${t.rubro} | ${t.whatsapp_number}\n  Creado: ${t.created_at}\n  Aprobar: APROBAR ${t.slug}\n\n`;
         }
       }
+      // Log del comando LISTAR
+      await env2.DB.prepare(
+        "INSERT INTO admin_commands (command, slug, admin_phone, result) VALUES (?, ?, ?, ?)"
+      ).bind("LISTAR", null, phone, `${pendientes.length} pendientes`).run();
     } else if (cmd === "ACTIVOS" || cmd === "ACTIVO") {
       const result = await env2.DB.prepare(
         "SELECT slug, business_name, whatsapp_number, rubro, active_at FROM tenants WHERE status = 'active' ORDER BY active_at DESC LIMIT 20"
@@ -3281,7 +3287,12 @@ async function handleOnboardingRegister(request, env2) {
       `Para aprobar responde:\n*APROBAR ${slug}*\n\n` +
       `Para rechazar:\n*RECHAZAR ${slug}*`;
     
-    await enviarWhatsAppEvolution(env2, env2.ADMIN_PHONE, adminMsg);
+    try {
+      await enviarWhatsAppEvolution(env2, env2.ADMIN_PHONE, adminMsg);
+      console.log(`Notificación admin enviada por WhatsApp para tenant ${slug}`);
+    } catch (e) {
+      console.error("Error enviando WhatsApp al admin:", e);
+    }
     
     return new Response(JSON.stringify({
       success: true,
