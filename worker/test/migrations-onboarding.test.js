@@ -18,6 +18,7 @@ function prodLikeDb() {
     INSERT INTO sgc_cit_horarios (dia_semana, tenant_id) VALUES ('lunes',3),('martes',3),('lunes',3),('martes',3),('lunes',1);
     INSERT INTO sgc_cit_config (clave, valor, tenant_id) VALUES ('max_citas_por_dia','20',1),('anticipacion_dias','30',1);
     INSERT INTO sgc_cit_bloqueos (fecha, motivo, tenant_id) VALUES ('2026-12-25','Navidad',1);
+    INSERT INTO sgc_ord_ConfigKV (key, value) VALUES ('tarifa_km','500');
   `);
   return db;
 }
@@ -51,6 +52,10 @@ test("migraciones: se aplican sobre un esquema como el de producción sin perder
   for (const gone of ["AdminUsers", "SesionesAdmin", "Pagos", "ServiciosCatalogo"]) assert.ok(!tables.includes(gone), gone);
   assert.ok(tables.includes("Clientes"));
   assert.ok(tables.includes("sgc_ord_TrackingTecnico"));
+
+  // 0005: ConfigKV con las columnas que usa sgc-ordenes
+  assert.equal(db.row("SELECT valor FROM sgc_ord_ConfigKV WHERE clave = 'tarifa_km'").valor, "500");
+  db.exec_("INSERT INTO sgc_ord_ConfigKV (clave, valor, fecha_actualizacion) VALUES ('x','1',CURRENT_TIMESTAMP) ON CONFLICT(clave) DO UPDATE SET valor = '2'");
 });
 
 test("migraciones: 0001 funciona con foreign_keys activas y mensajes referenciando conversaciones", () => {

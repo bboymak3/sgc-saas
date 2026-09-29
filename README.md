@@ -413,3 +413,38 @@ TOTAL: ~3-5 minutos desde el form hasta el bot respondiendo.
 ## Licencia
 
 Propietario — **BotWA / SGC**. Todos los derechos reservados. Uso interno únicamente.
+
+---
+
+## Actualización de seguridad y multi-tenant (2026-09-29)
+
+Ver **[DEPLOY.md](DEPLOY.md)** para el orden de despliegue, secretos y migraciones.
+
+### Autenticación
+
+| Superficie | Mecanismo |
+|---|---|
+| `POST /api/whatsapp/webhook` | `WEBHOOK_SECRET` en la URL (`?k=`) o header `X-Webhook-Secret`. Comandos admin solo por la instancia de la plataforma |
+| `/api/tenant/*` (panel de cada negocio) | `Authorization: Bearer <clave del tenant>` = HMAC(`PANEL_SECRET`, slug). Se entrega por WhatsApp (`/admin?t=slug#k=...`) |
+| `/api/admin/*`, `/api/citas-admin*`, `/api/citas/*`, `/api/consultar-*`, `/api/superadmin/*` | `Authorization: Bearer <ADMIN_TOKEN>` |
+| Públicos | `/api/servicios`, `/api/disponibilidad`, `/api/agendar`, `/api/chat`, `/api/tenant/public`, `/api/onboarding/register|status`, `POST /api/tenant/send-link` |
+
+Nuevos endpoints: `GET/PUT /api/tenant/horarios`, `GET /api/onboarding/qr` (con clave), `POST /api/tenant/send-link`,
+`GET /api/superadmin/tenants`, `POST /api/superadmin/sync-webhooks`, `GET /api/superadmin/tenants/:slug/panel-link`,
+`POST /api/superadmin/tenants/:slug/aprobar`. Nuevos comandos WhatsApp: `REACTIVAR`, `LINK <slug>`, `SYNC`.
+
+### Estructura
+
+```
+worker/
+├── src/                 # código fuente (antes: bundle con polyfills)
+│   ├── index.js         # router
+│   ├── lib/             # auth, tenant, schedule (horarios por tenant), evolution, citas, ordenes, time, http
+│   ├── whatsapp/        # webhook, tools de la IA, prompts, parser de respaldo, conversaciones
+│   ├── admin/commands.js
+│   ├── routes/          # public, tenant, admin
+│   └── onboarding.js
+├── schema/schema.sql    # snapshot del esquema de producción
+├── migrations/          # 0001–0006 (wrangler d1 migrations apply citas --remote)
+└── test/                # npm test (73) · npm run test:e2e (Chromium, requiere playwright)
+```
