@@ -4111,6 +4111,7 @@ __name(loadDefaultServices, "loadDefaultServices");
 // ============================================================
 async function handleOwnerCommand(env2, body, tenant, phone) {
   try {
+    console.log("OWNER COMMAND START", { phone, tenantId: tenant.id, tenantName: tenant.business_name, whatsapp: tenant.whatsapp_number });
     const data = body.data || {};
     const msg = data.message || {};
     let text = "";
@@ -4151,9 +4152,11 @@ async function handleOwnerCommand(env2, body, tenant, phone) {
         }
       } else {
         // Pausar todo el bot de este tenant
-        await env2.DB.prepare(
+        console.log("OWNER PAUSAR - tenantId:", tenantId);
+        const pauseResult = await env2.DB.prepare(
           "INSERT OR REPLACE INTO sgc_cit_config (tenant_id, clave, valor) VALUES (?, 'bot_paused', 'true')"
         ).bind(tenantId).run();
+        console.log("OWNER PAUSAR result:", JSON.stringify(pauseResult));
         reply = `⏸️ *Bot pausado para ${tenantName}*\n\nNo responderé a ningún mensaje nuevo.\n\nPara reactivar: REACTIVAR`;
       }
     } else if (cmd === "REACTIVAR" || cmd === "ACTIVAR" || cmd === "REANUDAR") {
@@ -4253,7 +4256,7 @@ async function handleOwnerCommand(env2, body, tenant, phone) {
     }
     return new Response("OK", { status: 200 });
   } catch (error) {
-    console.error("Error en handleOwnerCommand:", error);
+    console.error("Error en handleOwnerCommand:", error.message, error.stack);
     return new Response("OK", { status: 200 });
   }
 }
