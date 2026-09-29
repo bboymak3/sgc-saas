@@ -2653,12 +2653,12 @@ async function handleWhatsAppWebhook(request, env2) {
       return new Response("OK", { status: 200 });
     }
     
-    // 2. ¿Está este número específicamente pausado?
-    const pausedConv = await env2.DB.prepare(
-      "SELECT status FROM sgc_cit_WhatsApp_conversations WHERE phone = ? AND tenant_id = ? AND status = 'paused'"
+    // 2. ¿Está este número pausado o bloqueado?
+    const blockedConv = await env2.DB.prepare(
+      "SELECT status FROM sgc_cit_WhatsApp_conversations WHERE phone = ? AND tenant_id = ? AND status IN ('paused','blocked')"
     ).bind(phone, tenantId).first();
-    if (pausedConv) {
-      console.log(`Conversación pausada para ${phone} en tenant ${tenantId}`);
+    if (blockedConv) {
+      console.log(`Conversación ${blockedConv.status} para ${phone} en tenant ${tenantId}`);
       return new Response("OK", { status: 200 });
     }
     
@@ -3748,6 +3748,58 @@ async function handleAdminCommand(env2, body) {
       await env2.DB.prepare(
         "INSERT INTO admin_commands (command, slug, admin_phone, result) VALUES (?, ?, ?, ?)"
       ).bind("REACTIVAR", slug || null, phone, "success").run();
+    } else if (cmd === "BL" || cmd === "BLOQUEAR" || cmd === "BLOQ") {
+      // BL <numero> = bloquear número específico
+      if (!slug) {
+        reply = "❌ Falta el número.\n\nUso: *BL <numero>*\nEjemplo: *BL 56912345678*";
+      } else {
+        const num = slug.replace(/[^0-9]/g, "");
+        if (num.length < 8) {
+          reply = `❌ Número inválido: ${num}\n\nDebe ser un número de teléfono (mínimo 8 dígitos).`;
+        } else {
+          // Buscar si existe conversación
+          const conv = await env2.DB.prepare(
+            "SELECT id, contact_name, status, phone FROM sgc_cit_WhatsApp_conversations WHERE phone = ? AND tenant_id = 1"
+          ).bind(num).first();
+          if (conv) {
+            // Marcar como bloqueado
+            await env2.DB.prepare(
+              "UPDATE sgc_cit_WhatsApp_conversations SET status = 'blocked' WHERE id = ?"
+            ).bind(conv.id).run();
+            reply = `🚫 *Número bloqueado*\n\n📞 ${num} (${conv.contact_name || "sin nombre"})\n\nEl bot NO responderá a este número.\n\nPara desbloquear: *DESB ${num}*`;
+          } else {
+            // No existe conversación, crear registro bloqueado para que no responda si escribe
+            await env2.DB.prepare(
+              "INSERT INTO sgc_cit_WhatsApp_conversations (phone, contact_name, status, tenant_id) VALUES (?, ?, 'blocked', 1)"
+            ).bind(num, "Bloqueado por admin").run();
+            reply = `🚫 *Número bloqueado*\n\n📞 ${num}\n\nNo existe conversación previa, pero si escribe, el bot no responderá.\n\nPara desbloquear: *DESB ${num}*`;
+          }
+          await env2.DB.prepare(
+            "INSERT INTO admin_commands (command, slug, admin_phone, result) VALUES (?, ?, ?, ?)"
+          ).bind("BL", num, phone, "blocked").run();
+        }
+      }
+    } else if (cmd === "DESB" || cmd === "DESBLOQUEAR" || cmd === "UNBL" || cmd === "UNBLOQUEAR") {
+      // DESB <numero> = desbloquear número
+      if (!slug) {
+        reply = "❌ Falta el número.\n\nUso: *DESB <numero>*\nEjemplo: *DESB 56912345678*";
+      } else {
+        const num = slug.replace(/[^0-9]/g, "");
+        const conv = await env2.DB.prepare(
+          "SELECT id, contact_name, status, phone FROM sgc_cit_WhatsApp_conversations WHERE phone = ? AND tenant_id = 1"
+        ).bind(num).first();
+        if (conv) {
+          await env2.DB.prepare(
+            "UPDATE sgc_cit_WhatsApp_conversations SET status = 'active' WHERE id = ?"
+          ).bind(conv.id).run();
+          reply = `✅ *Número desbloqueado*\n\n📞 ${num} (${conv.contact_name || "sin nombre"})\n\nEl bot volverá a responder a este número.`;
+        } else {
+          reply = `❌ No se encontró el número ${num}.`;
+        }
+        await env2.DB.prepare(
+          "INSERT INTO admin_commands (command, slug, admin_phone, result) VALUES (?, ?, ?, ?)"
+        ).bind("DESB", num, phone, "unblocked").run();
+      }
     } else if (cmd === "ESTADO" || cmd === "STATUS") {
       // Ver estado del bot
       const pausedConfig = await env2.DB.prepare(
@@ -3755,21 +3807,31 @@ async function handleAdminCommand(env2, body) {
       ).first();
       const isPaused = pausedConfig?.valor === 'true';
       
-      const pausedConv = await env2.DB.prepare(
-        "SELECT phone, contact_name FROM sgc_cit_WhatsApp_conversations WHERE tenant_id = 1 AND status = 'paused'"
+      const blockedConv = await env2.DB.prepare(
+        "SELECT phone, contact_name, status FROM sgc_cit_WhatsApp_conversations WHERE tenant_id = 1 AND status IN ('paused','blocked') ORDER BY status, phone"
       ).all();
-      const pausedList = pausedConv.results || [];
+      const blockedList = blockedConv.results || [];
+      const pausedList = blockedList.filter(c => c.status === 'paused');
+      const blockedOnlyList = blockedList.filter(c => c.status === 'blocked');
       
       reply = `📊 *Estado del Bot*\n\n`;
       reply += `Bot global: ${isPaused ? '⏸️ PAUSADO' : '✅ Activo'}\n\n`;
       if (pausedList.length > 0) {
-        reply += `Números pausados (${pausedList.length}):\n`;
+        reply += `⏸️ Pausados (${pausedList.length}):\n`;
         for (const c of pausedList) {
           reply += `• ${c.phone} (${c.contact_name || 'sin nombre'})\n`;
         }
-        reply += `\nPara reactivar: REACTIVAR <número>`;
-      } else {
-        reply += `Números pausados: ninguno`;
+        reply += `\nPara reactivar: REACTIVAR <número>\n\n`;
+      }
+      if (blockedOnlyList.length > 0) {
+        reply += `🚫 Bloqueados (${blockedOnlyList.length}):\n`;
+        for (const c of blockedOnlyList) {
+          reply += `• ${c.phone} (${c.contact_name || 'sin nombre'})\n`;
+        }
+        reply += `\nPara desbloquear: DESB <número>\n\n`;
+      }
+      if (pausedList.length === 0 && blockedOnlyList.length === 0) {
+        reply += `Números pausados/bloqueados: ninguno`;
       }
       await env2.DB.prepare(
         "INSERT INTO admin_commands (command, slug, admin_phone, result) VALUES (?, ?, ?, ?)"
@@ -3795,6 +3857,8 @@ async function handleAdminCommand(env2, body) {
       reply += `*PAUSAR <numero>* - Pausar un número específico\n`;
       reply += `*REACTIVAR* - Reactivar el bot\n`;
       reply += `*REACTIVAR <numero>* - Reactivar un número\n`;
+      reply += `*BL <numero>* - Bloquear un número (bot no responde)\n`;
+      reply += `*DESB <numero>* - Desbloquear un número\n`;
       reply += `*ESTADO* - Ver si el bot está activo o pausado\n`;
       reply += `*SUSPENDER <slug>* - Suspender tenant\n`;
       reply += `*AYUDA* - Esta ayuda\n`;
