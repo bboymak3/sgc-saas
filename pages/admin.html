@@ -370,6 +370,205 @@
       th, td { padding: 10px 12px; font-size: 0.85rem; }
       .hide-mobile { display: none; }
     }
+
+    /* ===== Calendar / Agenda ===== */
+    .cal-toolbar {
+      display: flex; align-items: center; gap: 12px;
+      flex-wrap: wrap; margin-bottom: 18px;
+    }
+    .cal-segmented {
+      display: inline-flex; background: var(--bg-2);
+      border: 1px solid var(--border); border-radius: 999px;
+      padding: 3px;
+    }
+    .cal-segmented button {
+      background: none; border: 0; color: var(--text-muted);
+      padding: 7px 16px; border-radius: 999px;
+      font-weight: 600; font-size: 0.85rem; cursor: pointer;
+      font-family: inherit; transition: all 0.15s;
+    }
+    .cal-segmented button:hover { color: #fff; }
+    .cal-segmented button.active {
+      background: var(--primary); color: #042713;
+    }
+    .cal-nav {
+      display: inline-flex; align-items: center; gap: 8px;
+    }
+    .cal-nav button {
+      width: 34px; height: 34px; border-radius: 50%;
+      border: 1px solid var(--border); background: var(--bg-2);
+      color: var(--text); cursor: pointer; font-size: 1.15rem;
+      line-height: 1; display: inline-flex; align-items: center; justify-content: center;
+      transition: all 0.15s; font-family: inherit;
+    }
+    .cal-nav button:hover { border-color: var(--primary); color: var(--primary); }
+    .cal-nav .cal-title {
+      font-weight: 700; color: #fff; font-size: 1rem;
+      min-width: 190px; text-align: center;
+      text-transform: capitalize;
+    }
+    .cal-legend {
+      display: inline-flex; gap: 14px; flex-wrap: wrap;
+      margin-left: auto; font-size: 0.8rem; color: var(--text-muted);
+      align-items: center;
+    }
+    .cal-legend .lg-dot {
+      display: inline-block; width: 9px; height: 9px;
+      border-radius: 50%; margin-right: 5px; vertical-align: middle;
+    }
+    .lg-dot.pend { background: var(--warn); }
+    .lg-dot.aprob { background: var(--primary); }
+    .lg-dot.rech { background: var(--danger); }
+    .cal-legend .reload-info { font-size: 0.74rem; }
+
+    /* Month grid */
+    .cal-month {
+      background: var(--bg-1); border: 1px solid var(--border);
+      border-radius: var(--radius); overflow: hidden;
+    }
+    .cal-month-scroll { overflow-x: auto; }
+    .cal-month-grid {
+      display: grid; grid-template-columns: repeat(7, 1fr);
+      min-width: 660px; gap: 1px; background: var(--border);
+    }
+    .cal-dow {
+      background: var(--bg-2); padding: 10px 8px;
+      text-align: center; font-size: 0.74rem; font-weight: 700;
+      color: var(--text-muted); text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .cal-dow.weekend { color: var(--warn); }
+    .cal-cell {
+      min-height: 104px; padding: 6px;
+      cursor: pointer; transition: background 0.15s;
+      display: flex; flex-direction: column; gap: 3px;
+      background: var(--bg-1); position: relative;
+    }
+    .cal-cell:hover { background: var(--bg-2); }
+    .cal-cell.other-month { background: var(--bg); opacity: 0.55; }
+    .cal-cell.other-month:hover { background: var(--bg-2); opacity: 1; }
+    .cal-cell.today { box-shadow: inset 0 0 0 2px var(--primary); }
+    .cal-cell.has-citas { background: rgba(34,197,94,0.05); }
+    .cal-cell .cal-day-num {
+      font-weight: 700; color: var(--text);
+      font-size: 0.9rem; align-self: flex-start;
+      padding: 1px 7px; border-radius: 6px;
+    }
+    .cal-cell.today .cal-day-num {
+      background: var(--primary); color: #042713;
+    }
+    .cal-cita-mini {
+      font-size: 0.7rem; background: var(--bg-3);
+      border-radius: 4px; padding: 2px 5px;
+      color: var(--text-muted); white-space: nowrap;
+      overflow: hidden; text-overflow: ellipsis;
+      border-left: 3px solid var(--text-dim);
+      cursor: pointer;
+    }
+    .cal-cita-mini:hover { background: var(--bg-2); color: #fff; }
+    .cal-cita-mini.pendiente { border-left-color: var(--warn); }
+    .cal-cita-mini.aprobada { border-left-color: var(--primary); }
+    .cal-cita-mini.rechazada { border-left-color: var(--danger); }
+    .cal-cita-count {
+      font-size: 0.74rem; color: var(--text-muted);
+      font-weight: 600; padding: 2px 4px;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .cal-cita-count .dots { display: inline-flex; gap: 3px; }
+    .cal-cita-count .dots span {
+      width: 7px; height: 7px; border-radius: 50%; display: inline-block;
+    }
+
+    /* Week view */
+    .cal-week {
+      display: grid; grid-template-columns: repeat(7, 1fr);
+      gap: 10px;
+    }
+    .cal-week-col {
+      background: var(--bg-1); border: 1px solid var(--border);
+      border-radius: var(--radius-sm); padding: 10px;
+      min-height: 300px; display: flex; flex-direction: column; gap: 8px;
+    }
+    .cal-week-col .wk-date {
+      font-weight: 700; color: #fff; text-align: center;
+      padding-bottom: 8px; border-bottom: 1px solid var(--border);
+    }
+    .cal-week-col .wk-date .lbl {
+      display: block; font-size: 0.72rem; color: var(--text-muted);
+      text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    .cal-week-col .wk-date .num {
+      display: block; font-size: 1.5rem; line-height: 1.1;
+    }
+    .cal-week-col.today { border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary); }
+    .cal-week-col .wk-empty {
+      color: var(--text-dim); font-size: 0.8rem; text-align: center;
+      padding-top: 20px;
+    }
+    .cal-week-cita {
+      background: var(--bg-2); border-radius: 8px;
+      padding: 8px 10px; cursor: pointer;
+      border-left: 3px solid var(--text-dim);
+      transition: all 0.15s; font-size: 0.8rem;
+    }
+    .cal-week-cita:hover { background: var(--bg-3); transform: translateX(2px); }
+    .cal-week-cita.pendiente { border-left-color: var(--warn); }
+    .cal-week-cita.aprobada { border-left-color: var(--primary); }
+    .cal-week-cita.rechazada { border-left-color: var(--danger); }
+    .cal-week-cita .wc-time { font-weight: 700; color: var(--primary); font-size: 0.82rem; }
+    .cal-week-cita .wc-serv { color: #fff; font-weight: 600; margin-top: 2px; }
+    .cal-week-cita .wc-cli { color: var(--text-muted); font-size: 0.74rem; margin-top: 2px; }
+
+    /* Day view */
+    .cal-day-list { display: flex; flex-direction: column; gap: 10px; }
+    .cal-day-item {
+      background: var(--bg-1); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 16px 20px;
+      display: flex; gap: 18px; align-items: flex-start; flex-wrap: wrap;
+      border-left: 4px solid var(--text-dim);
+      transition: all 0.15s;
+    }
+    .cal-day-item:hover { border-color: var(--border-light); }
+    .cal-day-item.pendiente { border-left-color: var(--warn); }
+    .cal-day-item.aprobada { border-left-color: var(--primary); }
+    .cal-day-item.rechazada { border-left-color: var(--danger); }
+    .cal-day-item .di-time {
+      font-size: 1.6rem; font-weight: 800; color: var(--primary);
+      line-height: 1; min-width: 80px;
+    }
+    .cal-day-item .di-body { flex: 1; min-width: 200px; }
+    .cal-day-item .di-serv { color: #fff; font-weight: 700; font-size: 1.05rem; }
+    .cal-day-item .di-cli { color: var(--text); margin-top: 4px; }
+    .cal-day-item .di-sub { color: var(--text-muted); font-size: 0.82rem; margin-top: 2px; }
+    .cal-day-item .di-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    .cal-day-empty {
+      text-align: center; padding: 60px 20px;
+      color: var(--text-muted); background: var(--bg-1);
+      border: 1px dashed var(--border); border-radius: var(--radius);
+    }
+    .cal-day-empty .emoji { font-size: 2.5rem; display: block; margin-bottom: 10px; opacity: 0.5; }
+
+    /* Detail modal */
+    .cita-detail .detail-row {
+      display: flex; justify-content: space-between; gap: 12px;
+      padding: 9px 0; border-bottom: 1px solid var(--border);
+    }
+    .cita-detail .detail-row:last-child { border-bottom: 0; }
+    .cita-detail .detail-row .lbl { color: var(--text-muted); font-size: 0.85rem; flex-shrink: 0; }
+    .cita-detail .detail-row .val { color: #fff; font-weight: 600; text-align: right; word-break: break-word; }
+
+    @media (max-width: 900px) {
+      .cal-week-col { min-height: 220px; padding: 8px 6px; }
+      .cal-week-cita { padding: 6px 7px; font-size: 0.74rem; }
+    }
+    @media (max-width: 640px) {
+      .cal-nav .cal-title { min-width: 130px; font-size: 0.9rem; }
+      .cal-legend { margin-left: 0; width: 100%; }
+      .cal-week { grid-template-columns: 1fr; }
+      .cal-week-col { min-height: auto; }
+      .cal-day-item { gap: 12px; padding: 14px 16px; }
+      .cal-day-item .di-time { min-width: 70px; font-size: 1.3rem; }
+    }
   </style>
 </head>
 <body>
@@ -452,6 +651,9 @@
         <button class="tab active" data-tab="citas">
           📅 Citas <span class="count" id="countCitas">0</span>
         </button>
+        <button class="tab" data-tab="agenda">
+          🗓️ Agenda
+        </button>
         <button class="tab" data-tab="servicios">
           🔧 Servicios <span class="count" id="countServ">0</span>
         </button>
@@ -490,6 +692,30 @@
             </table>
           </div>
         </div>
+      </div>
+
+      <!-- TAB: Agenda (calendario visual) -->
+      <div class="tab-content" id="tab-agenda">
+        <div class="cal-toolbar">
+          <div class="cal-segmented" id="calSegmented">
+            <button type="button" data-view="mes" class="active">Mes</button>
+            <button type="button" data-view="semana">Semana</button>
+            <button type="button" data-view="dia">Día</button>
+          </div>
+          <div class="cal-nav">
+            <button type="button" id="calPrev" title="Anterior" aria-label="Anterior">‹</button>
+            <span class="cal-title" id="calTitle">—</span>
+            <button type="button" id="calNext" title="Siguiente" aria-label="Siguiente">›</button>
+          </div>
+          <button type="button" class="btn btn-secondary btn-sm" id="calToday">Hoy</button>
+          <div class="cal-legend">
+            <span><span class="lg-dot pend"></span>Pendiente</span>
+            <span><span class="lg-dot aprob"></span>Aprobada</span>
+            <span><span class="lg-dot rech"></span>Rechazada</span>
+            <span class="reload-info"><span class="dot"></span> 60s</span>
+          </div>
+        </div>
+        <div id="calContainer"></div>
       </div>
 
       <!-- TAB: Servicios -->
@@ -601,6 +827,15 @@
     </div>
   </div>
 
+  <!-- Modal: Detalle cita (agenda) -->
+  <div class="modal-overlay" id="citaDetailModal">
+    <div class="modal">
+      <h3>Detalle de cita</h3>
+      <div id="citaDetailBody" class="cita-detail"></div>
+      <div class="modal-actions" id="citaDetailActions"></div>
+    </div>
+  </div>
+
   <div class="toast-container" id="toastContainer"></div>
 
   <script>
@@ -630,6 +865,7 @@
         document.getElementById('mainContent').style.display = 'block';
         await loadCitas();
         await loadServicios();
+        await loadCalCitas();
         startAutoRefresh();
       } catch (err) {
         console.error('init error', err);
@@ -772,6 +1008,7 @@
         await apiPost(`/api/tenant/citas/${id}/aprobar?t=${encodeURIComponent(SLUG)}`);
         toast('success', 'Cita aprobada', 'Se envió confirmación por WhatsApp al cliente.');
         await loadCitas();
+        await loadCalCitas();
         await loadDashboard();
       } catch (err) {
         toast('error', 'Error al aprobar', err.message);
@@ -798,6 +1035,7 @@
         document.getElementById('rechazoModal').classList.remove('open');
         toast('info', 'Cita rechazada', 'Se envió el motivo al cliente por WhatsApp.');
         await loadCitas();
+        await loadCalCitas();
         await loadDashboard();
       } catch (err) {
         toast('error', 'Error al rechazar', err.message);
@@ -972,6 +1210,7 @@
         document.getElementById('tab-' + tab).classList.add('active');
         if (tab === 'servicios' && !serviciosList.length) loadServicios();
         if (tab === 'citas') loadCitas();
+        if (tab === 'agenda') renderCalendar();
         if (tab === 'config') renderConfig();
       });
     });
@@ -1013,6 +1252,304 @@
       if (s == null) return '';
       return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     }
+
+    // ===== Calendar / Agenda =====
+    let calCitas = [];
+    let calView = 'mes';
+    let calCurrent = new Date();
+    let calRefreshTimer = null;
+    const MONTH_NAMES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+    const DOW_SHORT = ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
+    const DOW_LONG = ['Lunes','Martes','Miércoles','Jueves','Viernes','Sábado','Domingo'];
+
+    function dateKey(d) {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${day}`;
+    }
+    function citaDateKey(c) {
+      const s = c.fecha_cita || '';
+      return s.length >= 10 ? s.substring(0, 10) : s;
+    }
+    function citasForDate(dateStr) {
+      return calCitas.filter(c => citaDateKey(c) === dateStr)
+        .sort((a, b) => (a.hora_cita || '').localeCompare(b.hora_cita || ''));
+    }
+    function estadoCita(c) { return c.estado_aprobacion || 'pendiente'; }
+    function estadoLabel(e) { return e === 'aprobada' ? 'Aprobada' : e === 'rechazada' ? 'Rechazada' : 'Pendiente'; }
+    function estadoBadgeClass(e) { return e === 'aprobada' ? 'badge-approved' : e === 'rechazada' ? 'badge-rejected' : 'badge-pending'; }
+    function horaCorta(h) { return (h || '').substring(0, 5); }
+    function dowIdx(d) { return d.getDay() === 0 ? 6 : d.getDay() - 1; }
+
+    async function loadCalCitas() {
+      try {
+        const data = await apiGet(`/api/tenant/citas?t=${encodeURIComponent(SLUG)}`);
+        calCitas = Array.isArray(data.citas) ? data.citas : [];
+        renderCalendar();
+      } catch (err) {
+        console.error('loadCalCitas', err);
+        const el = document.getElementById('calContainer');
+        if (el) el.innerHTML = `<div class="cal-day-empty"><span class="emoji">⚠️</span>Error al cargar el calendario: ${escapeHtml(err.message)}</div>`;
+      }
+    }
+
+    function renderCalendar() {
+      const titleEl = document.getElementById('calTitle');
+      const c = document.getElementById('calContainer');
+      if (!titleEl || !c) return;
+      titleEl.textContent = calTitleText();
+      if (calView === 'mes') renderMes(c);
+      else if (calView === 'semana') renderSemana(c);
+      else renderDia(c);
+    }
+
+    function calTitleText() {
+      if (calView === 'mes') {
+        return `${MONTH_NAMES[calCurrent.getMonth()]} ${calCurrent.getFullYear()}`;
+      } else if (calView === 'semana') {
+        const [s, e] = weekRange(calCurrent);
+        const fmt = (d) => `${d.getDate()} ${MONTH_NAMES[d.getMonth()].substring(0,3)}`;
+        if (s.getMonth() === e.getMonth()) {
+          return `${fmt(s)} – ${e.getDate()} ${MONTH_NAMES[e.getMonth()].substring(0,3)} ${e.getFullYear()}`;
+        }
+        return `${fmt(s)} – ${fmt(e)} ${e.getFullYear()}`;
+      } else {
+        return `${DOW_LONG[dowIdx(calCurrent)]}, ${calCurrent.getDate()} de ${MONTH_NAMES[calCurrent.getMonth()].toLowerCase()} ${calCurrent.getFullYear()}`;
+      }
+    }
+
+    function weekRange(d) {
+      const wd = d.getDay();
+      const mondayOffset = wd === 0 ? -6 : 1 - wd;
+      const start = new Date(d.getFullYear(), d.getMonth(), d.getDate() + mondayOffset);
+      const end = new Date(start.getFullYear(), start.getMonth(), start.getDate() + 6);
+      return [start, end];
+    }
+
+    function renderMes(container) {
+      const year = calCurrent.getFullYear();
+      const month = calCurrent.getMonth();
+      const firstDay = new Date(year, month, 1);
+      const firstWd = firstDay.getDay();
+      const mondayBased = firstWd === 0 ? 6 : firstWd - 1;
+      const gridStart = new Date(year, month, 1 - mondayBased);
+      const daysInMonth = new Date(year, month + 1, 0).getDate();
+      const totalCells = Math.ceil((mondayBased + daysInMonth) / 7) * 7;
+      const todayKey = dateKey(new Date());
+
+      let html = `<div class="cal-month"><div class="cal-month-scroll"><div class="cal-month-grid">`;
+      DOW_SHORT.forEach((dname, i) => {
+        html += `<div class="cal-dow${i >= 5 ? ' weekend' : ''}">${dname}</div>`;
+      });
+      for (let i = 0; i < totalCells; i++) {
+        const d = new Date(gridStart.getFullYear(), gridStart.getMonth(), gridStart.getDate() + i);
+        const key = dateKey(d);
+        const isOther = d.getMonth() !== month;
+        const isToday = key === todayKey;
+        const citas = citasForDate(key);
+        let classes = 'cal-cell';
+        if (isOther) classes += ' other-month';
+        if (isToday) classes += ' today';
+        if (citas.length) classes += ' has-citas';
+        html += `<div class="${classes}" data-date="${key}">`;
+        html += `<span class="cal-day-num">${d.getDate()}</span>`;
+        if (citas.length === 0) {
+          // sin citas
+        } else if (citas.length < 4) {
+          citas.forEach(cc => {
+            const e = estadoCita(cc);
+            html += `<div class="cal-cita-mini ${e}" data-cita-id="${cc.id}" title="${escapeHtml(horaCorta(cc.hora_cita))} · ${escapeHtml(cc.servicio||'—')}">${escapeHtml(horaCorta(cc.hora_cita))} ${escapeHtml(cc.servicio||'—')}</div>`;
+          });
+        } else {
+          const pend = citas.filter(cc => estadoCita(cc)==='pendiente').length;
+          const aprob = citas.filter(cc => estadoCita(cc)==='aprobada').length;
+          const rech = citas.filter(cc => estadoCita(cc)==='rechazada').length;
+          html += `<div class="cal-cita-count">${citas.length} cita${citas.length>1?'s':''}<span class="dots">`;
+          if (pend) html += `<span style="background:var(--warn)" title="${pend} pendiente(s)"></span>`;
+          if (aprob) html += `<span style="background:var(--primary)" title="${aprob} aprobada(s)"></span>`;
+          if (rech) html += `<span style="background:var(--danger)" title="${rech} rechazada(s)"></span>`;
+          html += `</span></div>`;
+        }
+        html += `</div>`;
+      }
+      html += `</div></div></div>`;
+      container.innerHTML = html;
+      container.onclick = (ev) => {
+        const mini = ev.target.closest('.cal-cita-mini');
+        if (mini) {
+          openCitaDetail(Number(mini.getAttribute('data-cita-id')));
+          return;
+        }
+        const cell = ev.target.closest('.cal-cell');
+        if (cell) {
+          const key = cell.getAttribute('data-date');
+          const [y,m,dd] = key.split('-').map(Number);
+          calCurrent = new Date(y, m-1, dd);
+          calView = 'dia';
+          syncSegmented();
+          renderCalendar();
+        }
+      };
+    }
+
+    function renderSemana(container) {
+      const [start] = weekRange(calCurrent);
+      const todayKey = dateKey(new Date());
+      let html = `<div class="cal-week">`;
+      for (let i = 0; i < 7; i++) {
+        const d = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);
+        const key = dateKey(d);
+        const citas = citasForDate(key);
+        const isToday = key === todayKey;
+        html += `<div class="cal-week-col${isToday ? ' today' : ''}">`;
+        html += `<div class="wk-date"><span class="lbl">${DOW_SHORT[dowIdx(d)]}</span><span class="num">${d.getDate()}</span></div>`;
+        if (citas.length === 0) {
+          html += `<div class="wk-empty">Sin citas</div>`;
+        } else {
+          citas.forEach(cc => {
+            const e = estadoCita(cc);
+            html += `<div class="cal-week-cita ${e}" data-cita-id="${cc.id}">`;
+            html += `<div class="wc-time">${escapeHtml(horaCorta(cc.hora_cita))}</div>`;
+            html += `<div class="wc-serv">${escapeHtml(cc.servicio||'—')}</div>`;
+            html += `<div class="wc-cli">${escapeHtml(cc.nombre_cliente||'')}</div>`;
+            html += `</div>`;
+          });
+        }
+        html += `</div>`;
+      }
+      html += `</div>`;
+      container.innerHTML = html;
+      container.onclick = (ev) => {
+        const el = ev.target.closest('.cal-week-cita');
+        if (el) openCitaDetail(Number(el.getAttribute('data-cita-id')));
+      };
+    }
+
+    function renderDia(container) {
+      const key = dateKey(calCurrent);
+      const citas = citasForDate(key);
+      let html = '';
+      if (citas.length === 0) {
+        html = `<div class="cal-day-empty"><span class="emoji">📭</span>No hay citas para este día</div>`;
+      } else {
+        html = `<div class="cal-day-list">`;
+        citas.forEach(cc => {
+          const e = estadoCita(cc);
+          const clienteSub = [cc.marca, cc.modelo, cc.patente].filter(x => x && x !== 'null' && x !== '').join(' ');
+          html += `<div class="cal-day-item ${e}">`;
+          html += `<div class="di-time">${escapeHtml(horaCorta(cc.hora_cita))}</div>`;
+          html += `<div class="di-body">`;
+          html += `<div class="di-serv">${escapeHtml(cc.servicio||'—')}</div>`;
+          html += `<div class="di-cli">${escapeHtml(cc.nombre_cliente||'—')}${cc.telefono ? ` · <span class="cell-mono" style="color:var(--text-muted)">${escapeHtml(cc.telefono)}</span>` : ''}</div>`;
+          if (clienteSub) html += `<div class="di-sub">${escapeHtml(clienteSub)}</div>`;
+          html += `</div>`;
+          html += `<div class="di-actions">`;
+          html += `<span class="badge ${estadoBadgeClass(e)}">${estadoLabel(e)}</span>`;
+          html += `<button class="btn btn-secondary btn-sm" onclick="openCitaDetail(${cc.id})">Ver detalle</button>`;
+          if (e === 'pendiente') {
+            html += `<button class="btn btn-primary btn-sm" onclick="calAprobar(${cc.id})">✓ Aprobar</button>`;
+            html += `<button class="btn btn-danger btn-sm" onclick="calRechazar(${cc.id})">✗ Rechazar</button>`;
+          } else if (e === 'aprobada') {
+            html += `<button class="btn btn-danger btn-sm" onclick="calRechazar(${cc.id})">✗ Rechazar</button>`;
+          }
+          html += `</div>`;
+          html += `</div>`;
+        });
+        html += `</div>`;
+      }
+      container.innerHTML = html;
+      container.onclick = null;
+    }
+
+    function syncSegmented() {
+      document.querySelectorAll('#calSegmented button').forEach(b => {
+        b.classList.toggle('active', b.getAttribute('data-view') === calView);
+      });
+    }
+    function calPrev() {
+      if (calView === 'mes') calCurrent = new Date(calCurrent.getFullYear(), calCurrent.getMonth() - 1, 1);
+      else if (calView === 'semana') calCurrent = new Date(calCurrent.getFullYear(), calCurrent.getMonth(), calCurrent.getDate() - 7);
+      else calCurrent = new Date(calCurrent.getFullYear(), calCurrent.getMonth(), calCurrent.getDate() - 1);
+      renderCalendar();
+    }
+    function calNext() {
+      if (calView === 'mes') calCurrent = new Date(calCurrent.getFullYear(), calCurrent.getMonth() + 1, 1);
+      else if (calView === 'semana') calCurrent = new Date(calCurrent.getFullYear(), calCurrent.getMonth(), calCurrent.getDate() + 7);
+      else calCurrent = new Date(calCurrent.getFullYear(), calCurrent.getMonth(), calCurrent.getDate() + 1);
+      renderCalendar();
+    }
+    function calGoToday() {
+      calCurrent = new Date();
+      renderCalendar();
+    }
+
+    document.querySelectorAll('#calSegmented button').forEach(b => {
+      b.addEventListener('click', () => {
+        calView = b.getAttribute('data-view');
+        syncSegmented();
+        renderCalendar();
+      });
+    });
+    document.getElementById('calPrev').addEventListener('click', calPrev);
+    document.getElementById('calNext').addEventListener('click', calNext);
+    document.getElementById('calToday').addEventListener('click', calGoToday);
+
+    function openCitaDetail(id) {
+      const c = calCitas.find(x => Number(x.id) === Number(id)) || citasList.find(x => Number(x.id) === Number(id));
+      if (!c) return;
+      const e = estadoCita(c);
+      const clienteSub = [c.marca, c.modelo, c.patente].filter(x => x && x !== 'null' && x !== '').join(' ');
+      const body = document.getElementById('citaDetailBody');
+      body.innerHTML = `
+        <div class="detail-row"><span class="lbl">Fecha</span><span class="val">${formatDate(c.fecha_cita)}</span></div>
+        <div class="detail-row"><span class="lbl">Hora</span><span class="val">${escapeHtml(c.hora_cita || '—')}</span></div>
+        <div class="detail-row"><span class="lbl">Servicio</span><span class="val">${escapeHtml(c.servicio || '—')}</span></div>
+        <div class="detail-row"><span class="lbl">Cliente</span><span class="val">${escapeHtml(c.nombre_cliente || '—')}</span></div>
+        <div class="detail-row"><span class="lbl">Teléfono</span><span class="val">${escapeHtml(c.telefono || '—')}</span></div>
+        ${clienteSub ? `<div class="detail-row"><span class="lbl">Vehículo</span><span class="val">${escapeHtml(clienteSub)}</span></div>` : ''}
+        ${c.tipo_atencion ? `<div class="detail-row"><span class="lbl">Tipo de atención</span><span class="val">${escapeHtml(c.tipo_atencion)}</span></div>` : ''}
+        ${c.observaciones ? `<div class="detail-row"><span class="lbl">Observaciones</span><span class="val">${escapeHtml(c.observaciones)}</span></div>` : ''}
+        <div class="detail-row"><span class="lbl">Estado</span><span class="val"><span class="badge ${estadoBadgeClass(e)}">${estadoLabel(e)}</span></span></div>
+      `;
+      const actions = document.getElementById('citaDetailActions');
+      let acts = '';
+      if (e === 'pendiente') {
+        acts += `<button class="btn btn-primary" onclick="calAprobar(${c.id})">✓ Aprobar</button>`;
+        acts += `<button class="btn btn-danger" onclick="calRechazar(${c.id})">✗ Rechazar</button>`;
+      } else if (e === 'aprobada') {
+        acts += `<button class="btn btn-danger" onclick="calRechazar(${c.id})">✗ Rechazar</button>`;
+      }
+      acts += `<button class="btn btn-secondary" id="citaDetailClose">Cerrar</button>`;
+      actions.innerHTML = acts;
+      document.getElementById('citaDetailModal').classList.add('open');
+      const closeBtn = document.getElementById('citaDetailClose');
+      if (closeBtn) closeBtn.addEventListener('click', () => document.getElementById('citaDetailModal').classList.remove('open'));
+    }
+    window.openCitaDetail = openCitaDetail;
+
+    window.calAprobar = async function(id) {
+      const modal = document.getElementById('citaDetailModal');
+      if (modal) modal.classList.remove('open');
+      await aprobarCita(id);
+    };
+    window.calRechazar = function(id) {
+      const modal = document.getElementById('citaDetailModal');
+      if (modal) modal.classList.remove('open');
+      abrirRechazo(id);
+    };
+
+    // Calendar auto-refresh cada 60s (solo si el tab Agenda está activo)
+    function startCalAutoRefresh() {
+      if (calRefreshTimer) clearInterval(calRefreshTimer);
+      calRefreshTimer = setInterval(async () => {
+        const active = document.querySelector('.tab.active');
+        if (active && active.getAttribute('data-tab') === 'agenda') {
+          await loadCalCitas();
+        }
+      }, 60000);
+    }
+    startCalAutoRefresh();
   </script>
 </body>
 </html>
