@@ -1241,7 +1241,10 @@ var index_default = {
         }
       }
       if (path === "/api/servicios" && request.method === "GET") {
-        const servicios = await env2.DB.prepare("SELECT * FROM sgc_cit_servicios_unificados WHERE activo = 1 ORDER BY orden ASC, id ASC").all();
+        const servSlug = url.searchParams.get("t") || "sgc";
+        const servTenant = await env2.DB.prepare("SELECT id FROM tenants WHERE slug = ?").bind(servSlug).first();
+        const servTenantId = servTenant?.id || 1;
+        const servicios = await env2.DB.prepare("SELECT * FROM sgc_cit_servicios_unificados WHERE activo = 1 AND tenant_id = ? ORDER BY orden ASC, id ASC").bind(servTenantId).all();
         return new Response(JSON.stringify({ servicios: servicios.results }), {
           headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
         });
