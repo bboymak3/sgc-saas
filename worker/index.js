@@ -3935,6 +3935,26 @@ async function handleOnboardingRegister(request, env2) {
       console.error("Error enviando WhatsApp al admin:", e);
     }
     
+    // Enviar confirmación al cliente (al WhatsApp que registró)
+    try {
+      const clientPhone = (whatsapp_number || "").replace(/[^0-9]/g, "");
+      if (clientPhone.length >= 8) {
+        const clientMsg = `✅ *¡Solicitud recibida!*
+
+📌 *Negocio:* ${business_name}
+🏷️ *Rubro:* ${rubro || "taller"}
+
+Estamos validando tu solicitud. Te avisaremos por aquí en cuanto tu bot esté listo (generalmente en minutos).
+
+Mientras tanto, puedes ver el estado de tu solicitud aquí:
+https://sgc-saas.pages.dev/status?slug=${slug}`;
+        await enviarWhatsAppEvolution(env2, env2.ADMIN_PHONE, clientMsg);
+        console.log(`Confirmación enviada al cliente ${clientPhone} para tenant ${slug}`);
+      }
+    } catch (e) {
+      console.error("Error enviando confirmación al cliente:", e);
+    }
+    
     return new Response(JSON.stringify({
       success: true,
       slug,
