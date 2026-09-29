@@ -1509,12 +1509,152 @@ var index_default = {
             chatMessages.push(msg);
           }
         }
+        
+        // ============================================================
+        // FUNCTION CALLING (igual que el webhook de WhatsApp)
+        // ============================================================
+        const CHAT_TOOLS = [
+          {
+            type: "function",
+            function: {
+              name: "agendar_cita",
+              description: "Agenda una cita nueva en el taller. SOLO llamar cuando el cliente haya confirmado explicitamente (si, confirmo, dale, ok, etc).",
+              parameters: {
+                type: "object",
+                properties: {
+                  fecha: { type: "string", description: "Fecha en formato YYYY-MM-DD" },
+                  hora: { type: "string", description: "Hora en formato HH:MM (24h)" },
+                  servicio: { type: "string", description: "Nombre del servicio exacto de la lista" },
+                  patente: { type: "string", description: "Patente del vehiculo (opcional)" },
+                  marca: { type: "string", description: "Marca del vehiculo (opcional)" },
+                  modelo: { type: "string", description: "Modelo del vehiculo (opcional)" }
+                },
+                required: ["fecha", "hora", "servicio"]
+              }
+            }
+          },
+          {
+            type: "function",
+            function: {
+              name: "verificar_disponibilidad",
+              description: "Verifica si un horario esta disponible antes de confirmar la cita",
+              parameters: {
+                type: "object",
+                properties: {
+                  fecha: { type: "string", description: "YYYY-MM-DD" },
+                  hora: { type: "string", description: "HH:MM" }
+                },
+                required: ["fecha", "hora"]
+              }
+            }
+          }
+        ];
+        
+        // 1era llamada: sin stream, con tools
         const aiResponse = await env2.AI.run(MODEL_ID, {
           messages: chatMessages,
-          max_tokens: 512,
-          stream: true
+          tools: CHAT_TOOLS,
+          max_tokens: 512
         });
-        return new Response(aiResponse, {
+        
+        let toolCallsArr = aiResponse.tool_calls || [];
+        if (!toolCallsArr.length && aiResponse.choices && aiResponse.choices[0] && aiResponse.choices[0].message && aiResponse.choices[0].message.tool_calls) {
+          toolCallsArr = aiResponse.choices[0].message.tool_calls;
+        }
+        
+        // Detectar si el usuario confirma y la IA no llamó al tool (estrategia hibrida)
+        const lastUserMsg = messages[messages.length - 1]?.content || "";
+        const userConfirmingAgendar = /\b(si|s[ií]|confirmo|dale|ok|claro|perfecto|de acuerdo|agend[ao]\b|siquiero|ah[ií] s[ií])\b/i.test(lastUserMsg);
+        const botMentionedAgendar = /\b(agend[ao]r?e?|tu cita| reservad[oa]| confirmad[oa])\b/i.test(aiResponse.response || "");
+        
+        if (toolCallsArr.length === 0 && userConfirmingAgendar && (botMentionedAgendar || /agendar|cita/i.test(lastUserMsg))) {
+          // 2da llamada FORZADA con tool_choice
+          const forcedResponse = await env2.AI.run(MODEL_ID, {
+            messages: [
+              { role: "system", content: systemPrompt + "\n\nIMPORTANTE: El cliente ha confirmado. Debes llamar a la funcion agendar_cita AHORA. Extrae los datos del contexto y llamala." },
+              ...messages.map(m => m.role !== "system" ? m : null).filter(Boolean)
+            ],
+            tools: CHAT_TOOLS,
+            tool_choice: { type: "function", function: { name: "agendar_cita" } },
+            max_tokens: 512
+          });
+          
+          toolCallsArr = forcedResponse.tool_calls || [];
+          if (!toolCallsArr.length && forcedResponse.choices && forcedResponse.choices[0] && forcedResponse.choices[0].message && forcedResponse.choices[0].message.tool_calls) {
+            toolCallsArr = forcedResponse.choices[0].message.tool_calls;
+          }
+          if (toolCallsArr.length > 0) {
+            aiResponse.response = forcedResponse.response;
+          }
+          
+          // Si aun no llama al tool, parser manual de backup
+          if (toolCallsArr.length === 0) {
+            const parsed = await parseCitaFromHistory(messages.map(m => ({ content: m.content })), lastUserMsg, env2, chatTenantId);
+            if (parsed) {
+              toolCallsArr = [{
+                function: { name: "agendar_cita", arguments: JSON.stringify(parsed) }
+              }];
+            }
+          }
+        }
+        
+        let replyText = "";
+        
+        if (toolCallsArr.length > 0) {
+          // Ejecutar tools
+          for (const call of toolCallsArr) {
+            let params = {};
+            const argsStr = call.function?.arguments || call.arguments || call.parameters;
+            try {
+              if (typeof argsStr === "string") {
+                params = JSON.parse(argsStr);
+              } else {
+                params = argsStr || {};
+              }
+            } catch (e) {
+              try {
+                const cleaned = argsStr.replace(/^[^{]*({[\s\S]*})[^}]*$/, "$1");
+                params = JSON.parse(cleaned);
+              } catch (e2) { params = {}; }
+            }
+            const toolName = call.function?.name || call.name;
+            
+            // Crear conversación fake para ejecutar tool (mismo formato que webhook)
+            const fakeConversation = {
+              id: 0,
+              phone: "web-" + (chatSlug),
+              contact_name: messages.find(m => m.role === "user")?.content?.slice(0, 30) || "Cliente Web",
+              tenant_id: chatTenantId,
+              client_context: null
+            };
+            
+            const result = await executeWhatsAppTool(env2, toolName, params, fakeConversation);
+            
+            if (toolName === "agendar_cita" && result.success) {
+              const fechaFmt = formatDateSpanish(params.fecha);
+              replyText = `*Cita agendada con \u00e9xito!* \u2705\n\n\u{1F4C5} *Fecha:* ${fechaFmt}\n\u{23F0} *Hora:* ${params.hora}\n\u{1F527} *Servicio:* ${params.servicio}\n${params.patente ? "\u{1F697} *Veh\u00edculo:* " + params.patente + "\n" : ""}\u{1F4DE} *Te esperamos!*\n\nSi necesitas reprogramar, av\u00edsanos.`;
+            } else if (toolName === "verificar_disponibilidad") {
+              if (result.disponible) {
+                replyText = `\u2705 El horario est\u00e1 disponible. \u00bfConfirmas la cita?`;
+              } else {
+                replyText = `\u274C Lo siento, ese horario no est\u00e1 disponible (${result.motivo}). \u00bfTe queda otro horario?`;
+              }
+            } else if (result.error) {
+              replyText = `Lo siento, hubo un problema: ${result.error} \u{1F615}\n\n\u00bfProbamos con otro horario?`;
+            }
+          }
+        } else {
+          replyText = aiResponse.response || "Lo siento, no pude procesar tu mensaje.";
+        }
+        
+        // Devolver como SSE streaming (simulando streaming para compatibilidad con el front)
+        const formatted = formatForWhatsApp(replyText);
+        const sse = "data: " + JSON.stringify({
+          choices: [{ delta: { content: formatted }, finish_reason: null, index: 0 }],
+          response: formatted
+        }) + "\n\n";
+        
+        return new Response(sse, {
           headers: {
             ...CORS_HEADERS,
             "Content-Type": "text/event-stream; charset=utf-8",
