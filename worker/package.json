@@ -1,0 +1,19 @@
+{
+  "name": "sgc-saas-worker",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --no-warnings --test \"test/**/*.test.js\"",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "migrate": "wrangler d1 migrations apply citas --remote",
+    "test:e2e": "node --no-warnings --test \"test/e2e/*.e2e.js\""
+  },
+  "engines": {
+    "node": ">=22.13"
+  },
+  "devDependencies": {
+    "playwright": "^1.56.1"
+  }
+}

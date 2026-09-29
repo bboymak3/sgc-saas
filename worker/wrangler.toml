@@ -1,7 +1,6 @@
 name = "sgc-saas"
-main = "index.js"
+main = "src/index.js"
 compatibility_date = "2025-10-08"
-compatibility_flags = ["nodejs_compat"]
 
 [assets]
 directory = "./assets"
@@ -11,11 +10,7 @@ binding = "ASSETS"
 binding = "DB"
 database_name = "citas"
 database_id = "678b4adc-232d-43db-86ec-230828268161"
-
-[[d1_databases]]
-binding = "TALLER_DB"
-database_name = "citas"
-database_id = "678b4adc-232d-43db-86ec-230828268161"
+migrations_dir = "migrations"
 
 [ai]
 binding = "AI"
@@ -27,3 +22,13 @@ SGCORDENES_URL = "https://sgc-ordenes-di7.pages.dev"
 EVOLUTION_API_URL = "https://evolution-api-production-91a07.up.railway.app"
 EVOLUTION_INSTANCE_NAME = "make peueba"
 ADMIN_PHONE = "584167775771"
+PUBLIC_WORKER_URL = "https://sgc-saas.activo.workers.dev"
+PANEL_URL = "https://sgc-saas.pages.dev"
+ORDENES_TENANT_ID = "1"
+
+# Secrets (NO van en este archivo). Configurar con:
+#   wrangler secret put EVOLUTION_API_KEY
+#   wrangler secret put ADMIN_TOKEN      # super-admin (openssl rand -hex 32)
+#   wrangler secret put PANEL_SECRET     # firma las claves de panel de cada tenant
+#   wrangler secret put WEBHOOK_SECRET   # autentica los webhooks de Evolution
+#   wrangler secret put ORDENES_API_KEY  # opcional: clave compartida con sgc-ordenes

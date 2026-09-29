@@ -110,6 +110,37 @@ body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:#0a0f1
 </div>
 <div class="toast" id="toast"></div>
 <script>
+// Autenticación admin: las rutas /api/admin/* y /api/citas-admin exigen ADMIN_TOKEN.
+// Se pide una vez, se guarda en este navegador y se adjunta a cada llamada.
+(function () {
+  var KEY = 'sgc_admin_token';
+  var origFetch = window.fetch.bind(window);
+  function getToken(force) {
+    var t = null;
+    try { t = localStorage.getItem(KEY); } catch (_) {}
+    if (!t || force) {
+      t = window.prompt('Token de administrador (ADMIN_TOKEN):') || '';
+      try { localStorage.setItem(KEY, t); } catch (_) {}
+    }
+    return t;
+  }
+  window.fetch = async function (input, init) {
+    var url = typeof input === 'string' ? input : input.url;
+    if (!/^\/api\/(admin|citas-admin)/.test(url)) return origFetch(input, init);
+    init = Object.assign({}, init || {});
+    var headers = new Headers(init.headers || {});
+    headers.set('Authorization', 'Bearer ' + getToken(false));
+    init.headers = headers;
+    var res = await origFetch(input, init);
+    if (res.status === 401) {
+      headers.set('Authorization', 'Bearer ' + getToken(true));
+      res = await origFetch(input, init);
+    }
+    return res;
+  };
+})();
+</script>
+<script>
 var API = '/api/citas-admin';
 var currentFilter = '';
 var autoRefreshInterval = null;

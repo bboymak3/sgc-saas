@@ -1,0 +1,5 @@
+# Copia a .dev.vars para `wrangler dev` (nunca subir .dev.vars)
+EVOLUTION_API_KEY=tu-clave-de-evolution
+ADMIN_TOKEN=genera-con-openssl-rand-hex-32
+PANEL_SECRET=genera-con-openssl-rand-hex-32
+WEBHOOK_SECRET=genera-con-openssl-rand-hex-32

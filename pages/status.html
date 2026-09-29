@@ -282,6 +282,21 @@
     const WORKER_URL = 'https://sgc-saas.activo.workers.dev';
     const urlParams = new URLSearchParams(window.location.search);
     const slug = urlParams.get('slug');
+    // Clave privada del negocio (llega en el enlace de WhatsApp como #k=...)
+    const KEY_STORAGE = 'sgc_panel_key_' + slug;
+    function storageGet(k) { try { return localStorage.getItem(k); } catch (_) { return null; } }
+    function storageSet(k, v) { try { localStorage.setItem(k, v); } catch (_) {} }
+    const PANEL_KEY = (function () {
+      const m = window.location.hash.match(/[#&]k=([0-9a-fA-F]{16,128})/);
+      if (m) {
+        storageSet(KEY_STORAGE, m[1]);
+        history.replaceState(null, '', window.location.pathname + window.location.search);
+        return m[1];
+      }
+      return storageGet(KEY_STORAGE);
+    })();
+    let lastQr = null;
+    let lastQrAt = 0;
 
     if (!slug) {
       document.getElementById('content').innerHTML = `
@@ -352,11 +367,22 @@
           bannerIcon = '✅';
           bannerTitle = '¡Aprobado! Conecta tu WhatsApp';
           bannerSub = 'Escanea el código QR para activar el bot en tu número.';
-          if (data.qr_url) {
-            extraHtml = renderQRSection(data.qr_url, t);
+          if (data.qr_available && PANEL_KEY) {
+            extraHtml = renderQRSection(t);
             actionsHtml = `
-              <a href="${escapeHtml(data.qr_url)}" target="_blank" rel="noopener" class="btn btn-primary">📱 Abrir QR en nueva pestaña</a>
-              <a href="https://wa.me/${escapeHtml((t.whatsapp_number || '').replace(/[^0-9]/g, ''))}" target="_blank" rel="noopener" class="btn btn-secondary">💬 Reenviar QR por WhatsApp</a>
+              <button type="button" class="btn btn-primary" onclick="loadQr(true)">🔄 Generar QR nuevo</button>
+              <a href="index.html" class="btn btn-secondary">← Volver al inicio</a>
+            `;
+          } else if (data.qr_available) {
+            extraHtml = `
+              <div class="note-card">
+                <span class="icon">🔐</span>
+                <span>Por seguridad, el QR solo se muestra desde el enlace privado que te enviamos por WhatsApp. Ábrelo desde ese mensaje o pide uno nuevo.</span>
+              </div>
+            `;
+            actionsHtml = `
+              <button type="button" class="btn btn-primary" onclick="sendLink(this)">📲 Enviarme el enlace por WhatsApp</button>
+              <a href="index.html" class="btn btn-secondary">← Volver al inicio</a>
             `;
           } else {
             extraHtml = `
@@ -372,6 +398,7 @@
           bannerTitle = '¡Bot activo y funcionando!';
           bannerSub = 'Tu asistente de WhatsApp ya está atendiendo clientes.';
           const adminUrl = `${location.origin}/admin?t=${encodeURIComponent(t.slug)}`;
+          const adminHref = `/admin?t=${encodeURIComponent(t.slug)}${PANEL_KEY ? '#k=' + PANEL_KEY : ''}`;
           extraHtml = `
             <div class="note-card">
               <span class="icon">🚀</span>
@@ -386,7 +413,7 @@
             </div>
           `;
           actionsHtml = `
-            <a href="/admin?t=${encodeURIComponent(t.slug)}" class="btn btn-primary">🚀 Abrir mi panel admin</a>
+            <a href="${adminHref}" class="btn btn-primary">🚀 Abrir mi panel admin</a>
             <a href="index.html" class="btn btn-secondary">← Volver al inicio</a>
           `;
         } else if (t.status === 'rejected') {
@@ -442,6 +469,8 @@
           </div>
         `;
 
+        if (document.getElementById('qrImg')) loadQr(false);
+
         // Bind copy button if present
         const copyBtn = document.getElementById('copyBtn');
         if (copyBtn) {
@@ -465,7 +494,48 @@
       }
     }
 
-    function renderQRSection(qrUrl, tenant) {
+    async function loadQr(force) {
+      const img = document.getElementById('qrImg');
+      if (!img) return;
+      const show = (b64) => {
+        img.src = 'data:image/png;base64,' + b64;
+        img.style.display = 'block';
+        const f = document.getElementById('qrFallback');
+        if (f) f.style.display = 'none';
+      };
+      // El QR de WhatsApp expira: se renueva cada 30 s
+      if (!force && lastQr && Date.now() - lastQrAt < 30000) return show(lastQr);
+      try {
+        const res = await fetch(`${WORKER_URL}/api/onboarding/qr?slug=${encodeURIComponent(slug)}`, {
+          headers: { 'Authorization': 'Bearer ' + PANEL_KEY }
+        });
+        const data = await res.json();
+        if (res.ok && data.qr_base64) {
+          lastQr = data.qr_base64;
+          lastQrAt = Date.now();
+          show(lastQr);
+        } else {
+          const f = document.getElementById('qrFallback');
+          if (f) f.innerHTML = `<span class="icon">⚠️</span><strong>${escapeHtml(data.error || 'QR no disponible')}</strong>`;
+        }
+      } catch (_) { /* se reintenta en el próximo refresco */ }
+    }
+
+    async function sendLink(btn) {
+      btn.disabled = true;
+      try {
+        await fetch(`${WORKER_URL}/api/tenant/send-link`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ t: slug })
+        });
+        showToast('Si tu solicitud fue aprobada, te enviamos el enlace por WhatsApp');
+      } catch (_) {
+        showToast('No se pudo enviar. Intenta nuevamente.');
+      }
+    }
+
+    function renderQRSection(tenant) {
       return `
         <div class="qr-section">
           <h3>📱 Escanea este código QR</h3>
@@ -479,7 +549,7 @@
             <div class="qr-fallback" id="qrFallback">
               <span class="icon">📡</span>
               <strong>Cargando QR…</strong>
-              <span style="font-size:0.78rem;">Si no aparece en 5s, ábrelo con el botón de abajo.</span>
+              <span style="font-size:0.78rem;">Si no aparece en unos segundos, toca "Generar QR nuevo".</span>
             </div>
           </div>
 
@@ -496,7 +566,7 @@
 
           <div class="note-card">
             <span class="icon">💬</span>
-            <span>También te enviamos el QR por WhatsApp al <strong>${escapeHtml(tenant.whatsapp_number || 'tu número')}</strong>. Si no lo recibiste, dale al botón "Reenviar QR".</span>
+            <span>El código expira en menos de un minuto; esta página lo renueva automáticamente.</span>
           </div>
         </div>
       `;
@@ -514,20 +584,6 @@
       }, 2500);
     }
 
-    // Attempt to load QR image after each render (CORS may block; we handle gracefully)
-    const observer = new MutationObserver(() => {
-      const img = document.getElementById('qrImg');
-      if (img && !img.dataset.bound) {
-        img.dataset.bound = '1';
-        const src = document.querySelector('.btn-primary')?.href;
-        if (src) {
-          img.onload = () => { img.style.display = 'block'; const f = document.getElementById('qrFallback'); if (f) f.style.display = 'none'; };
-          img.onerror = () => { /* keep fallback visible */ };
-          img.src = src;
-        }
-      }
-    });
-    observer.observe(document.getElementById('content'), { childList: true, subtree: true });
   </script>
 </body>
 </html>
