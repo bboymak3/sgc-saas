@@ -1,0 +1,1018 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BotWA — Panel Admin</title>
+  <meta name="robots" content="noindex,nofollow">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%2322c55e'/%3E%3Cpath d='M32 12c-11 0-20 8.5-20 19 0 3.6 1 7 3 10L12 52l11.5-3c2.8 1.5 6 2.3 9.3 2.3 11 0 20-8.5 20-19S43 12 32 12z' fill='%23fff'/%3E%3Cpath d='M42 36.5c-.6-.3-3.6-1.8-4.2-2-.6-.2-1-.3-1.4.3-.4.6-1.5 2-1.9 2.3-.4.4-.7.4-1.3.1-3.6-1.8-6-3.2-8.4-7.3-.6-1 .6-1 1.8-3.1.2-.4.1-.7 0-1-.2-.3-1.4-3.3-1.9-4.6-.5-1.2-1-1-1.4-1l-1.2 0c-.4 0-1 .2-1.6.7-2 1.8-2.5 4.5-2.3 7.3.4 4 2.9 7.9 3.3 8.5.4.6 5.8 9 14.2 12.3 5.3 2.1 6.6 1.9 8 1.7 1.7-.2 3.6-1.5 4.1-3 .5-1.4.5-2.7.4-3-.2-.3-.6-.4-1.2-.7z' fill='%2322c55e'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --bg: #0a0a0a;
+      --bg-1: #111111;
+      --bg-2: #1a1a1a;
+      --bg-3: #222222;
+      --border: #2a2a2a;
+      --border-light: #3a3a3a;
+      --text: #e8e8e8;
+      --text-muted: #999;
+      --text-dim: #666;
+      --primary: #22c55e;
+      --primary-dark: #16a34a;
+      --primary-darker: #15803d;
+      --danger: #ef4444;
+      --warn: #fbbf24;
+      --info: #3b82f6;
+      --radius: 14px;
+      --radius-sm: 10px;
+      --shadow: 0 10px 40px rgba(0,0,0,0.4);
+    }
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg); color: var(--text);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+      min-height: 100vh;
+    }
+    .container { max-width: 1280px; margin: 0 auto; padding: 0 24px; }
+
+    /* ===== Header ===== */
+    header {
+      background: var(--bg-1);
+      border-bottom: 1px solid var(--border);
+      position: sticky; top: 0; z-index: 50;
+    }
+    .header-inner {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 0; gap: 16px;
+    }
+    .brand { display: flex; align-items: center; gap: 12px; }
+    .logo-mark {
+      width: 38px; height: 38px; border-radius: 10px;
+      background: linear-gradient(135deg, var(--primary), var(--primary-darker));
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 6px 20px rgba(34,197,94,0.35);
+    }
+    .logo-mark svg { width: 24px; height: 24px; }
+    .brand-text .brand-name { font-weight: 800; color: #fff; font-size: 1.15rem; letter-spacing: -0.5px; }
+    .brand-text .brand-name .accent { color: var(--primary); }
+    .brand-text .tenant-name { color: var(--text-muted); font-size: 0.85rem; }
+    .header-actions { display: flex; align-items: center; gap: 10px; }
+    .header-actions .tenant-pill {
+      background: var(--bg-2); border: 1px solid var(--border);
+      padding: 6px 12px; border-radius: 999px;
+      font-size: 0.8rem; color: var(--text-muted);
+    }
+    .header-actions .tenant-pill code { color: var(--primary); font-weight: 600; }
+    .back-link { color: var(--text-muted); font-size: 0.9rem; text-decoration: none; display: inline-flex; align-items: center; gap: 4px; }
+    .back-link:hover { color: #fff; text-decoration: none; }
+
+    /* ===== Demo banner ===== */
+    .demo-banner {
+      background: linear-gradient(90deg, rgba(251,191,36,0.12), rgba(251,191,36,0.04));
+      border-bottom: 1px solid rgba(251,191,36,0.3);
+      color: var(--warn);
+      padding: 8px 0;
+      text-align: center;
+      font-size: 0.88rem;
+    }
+    .demo-banner strong { font-weight: 700; }
+
+    /* ===== Loading / error / empty states ===== */
+    .state-wrap { padding: 80px 24px; text-align: center; }
+    .spinner {
+      width: 40px; height: 40px;
+      border: 3px solid var(--border);
+      border-top-color: var(--primary);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto 18px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .state-wrap h2 { color: #fff; margin-bottom: 8px; font-size: 1.3rem; }
+    .state-wrap p { color: var(--text-muted); margin-bottom: 16px; }
+    .btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 11px 22px; border-radius: 999px;
+      font-weight: 700; font-size: 0.95rem;
+      cursor: pointer; border: 0;
+      font-family: inherit;
+      transition: all 0.2s; text-decoration: none;
+    }
+    .btn-primary { background: var(--primary); color: #042713; }
+    .btn-primary:hover:not(:disabled) { background: #fff; }
+    .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-secondary { background: var(--bg-2); color: #fff; border: 1px solid var(--border); }
+    .btn-secondary:hover { border-color: var(--primary); }
+    .btn-danger { background: var(--danger); color: #fff; }
+    .btn-danger:hover:not(:disabled) { background: #dc2626; }
+    .btn-sm { padding: 6px 12px; font-size: 0.82rem; }
+
+    /* ===== KPIs ===== */
+    .kpis-grid {
+      display: grid; grid-template-columns: repeat(4, 1fr);
+      gap: 16px; margin: 28px 0;
+    }
+    .kpi-card {
+      background: linear-gradient(180deg, var(--bg-2), var(--bg-1));
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 22px 20px;
+      position: relative;
+      overflow: hidden;
+      transition: all 0.2s;
+    }
+    .kpi-card:hover { border-color: var(--border-light); transform: translateY(-2px); }
+    .kpi-card::before {
+      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+      background: var(--primary);
+    }
+    .kpi-card.warn::before { background: var(--warn); }
+    .kpi-card.info::before { background: var(--info); }
+    .kpi-card.success::before { background: var(--primary); }
+    .kpi-card .kpi-icon {
+      position: absolute; top: 16px; right: 16px;
+      font-size: 1.5rem; opacity: 0.5;
+    }
+    .kpi-card .kpi-label {
+      color: var(--text-muted); font-size: 0.85rem;
+      text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;
+    }
+    .kpi-card .kpi-value {
+      font-size: 2.4rem; font-weight: 900; color: #fff;
+      line-height: 1.1; margin-top: 6px;
+      letter-spacing: -1px;
+    }
+    .kpi-card .kpi-sub { color: var(--text-dim); font-size: 0.78rem; margin-top: 4px; }
+
+    /* ===== Tabs ===== */
+    .tabs {
+      display: flex; gap: 4px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 24px;
+      overflow-x: auto;
+    }
+    .tab {
+      padding: 12px 22px;
+      background: none; border: 0;
+      color: var(--text-muted);
+      font-weight: 600; font-size: 0.95rem;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      transition: all 0.2s;
+      font-family: inherit;
+      white-space: nowrap;
+      display: inline-flex; align-items: center; gap: 8px;
+    }
+    .tab:hover { color: #fff; }
+    .tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+    .tab .count {
+      background: var(--bg-2); color: var(--text-muted);
+      padding: 2px 8px; border-radius: 999px;
+      font-size: 0.75rem; font-weight: 700;
+    }
+    .tab.active .count { background: rgba(34,197,94,0.15); color: var(--primary); }
+
+    .tab-content { display: none; animation: fadeIn 0.25s; }
+    .tab-content.active { display: block; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+    /* ===== Filters bar ===== */
+    .filters-bar {
+      display: flex; gap: 8px; flex-wrap: wrap;
+      margin-bottom: 18px; align-items: center;
+    }
+    .filter-pill {
+      background: var(--bg-2); border: 1px solid var(--border);
+      color: var(--text-muted);
+      padding: 7px 14px; border-radius: 999px;
+      font-size: 0.85rem; font-weight: 600;
+      cursor: pointer; transition: all 0.2s;
+      font-family: inherit;
+    }
+    .filter-pill:hover { color: #fff; border-color: var(--border-light); }
+    .filter-pill.active { background: var(--primary); color: #042713; border-color: var(--primary); }
+    .filters-bar .spacer { flex: 1; }
+    .filters-bar .reload-info {
+      color: var(--text-dim); font-size: 0.78rem;
+      display: inline-flex; align-items: center; gap: 6px;
+    }
+    .filters-bar .reload-info .dot { width: 6px; height: 6px; background: var(--primary); border-radius: 50%; animation: pulse 2s infinite; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+    /* ===== Table ===== */
+    .table-wrap {
+      background: var(--bg-1);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    .table-scroll { overflow-x: auto; }
+    table {
+      width: 100%; border-collapse: collapse;
+      font-size: 0.9rem;
+    }
+    thead {
+      background: var(--bg-2);
+    }
+    th {
+      text-align: left; padding: 12px 16px;
+      color: var(--text-muted); font-weight: 600;
+      font-size: 0.78rem; text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+    td {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border);
+      color: var(--text);
+      vertical-align: middle;
+    }
+    tbody tr { transition: background 0.15s; }
+    tbody tr:hover { background: rgba(34,197,94,0.04); }
+    tbody tr:last-child td { border-bottom: 0; }
+    .cell-mono { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.85rem; color: var(--text-muted); }
+    .cell-strong { color: #fff; font-weight: 600; }
+    .cell-sub { color: var(--text-dim); font-size: 0.78rem; margin-top: 2px; }
+
+    .badge {
+      display: inline-block; padding: 3px 10px;
+      border-radius: 999px; font-size: 0.74rem;
+      font-weight: 700; letter-spacing: 0.3px;
+      text-transform: uppercase;
+    }
+    .badge-pending { background: rgba(251,191,36,0.15); color: var(--warn); border: 1px solid rgba(251,191,36,0.3); }
+    .badge-approved { background: rgba(34,197,94,0.15); color: var(--primary); border: 1px solid rgba(34,197,94,0.3); }
+    .badge-rejected { background: rgba(239,68,68,0.15); color: var(--danger); border: 1px solid rgba(239,68,68,0.3); }
+    .badge-active { background: rgba(34,197,94,0.15); color: var(--primary); border: 1px solid rgba(34,197,94,0.3); }
+    .badge-inactive { background: rgba(107,114,128,0.15); color: #9ca3af; border: 1px solid rgba(107,114,128,0.3); }
+
+    .action-btns { display: flex; gap: 6px; flex-wrap: nowrap; }
+    .icon-btn {
+      width: 32px; height: 32px;
+      border-radius: 8px; border: 1px solid var(--border);
+      background: var(--bg-2); color: var(--text-muted);
+      cursor: pointer; transition: all 0.15s;
+      display: inline-flex; align-items: center; justify-content: center;
+      font-size: 0.95rem;
+    }
+    .icon-btn:hover { border-color: var(--border-light); color: #fff; }
+    .icon-btn.approve:hover { background: rgba(34,197,94,0.15); color: var(--primary); border-color: var(--primary); }
+    .icon-btn.reject:hover { background: rgba(239,68,68,0.15); color: var(--danger); border-color: var(--danger); }
+    .icon-btn.edit:hover { background: rgba(59,130,246,0.15); color: var(--info); border-color: var(--info); }
+    .icon-btn.delete:hover { background: rgba(239,68,68,0.15); color: var(--danger); border-color: var(--danger); }
+
+    .empty-row td { text-align: center; padding: 50px 20px; color: var(--text-muted); }
+    .empty-row .emoji { font-size: 2.5rem; display: block; margin-bottom: 10px; opacity: 0.5; }
+
+    .table-toolbar {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 16px; gap: 12px; flex-wrap: wrap;
+    }
+    .table-toolbar h3 { color: #fff; font-size: 1.1rem; font-weight: 700; }
+
+    /* ===== Config cards ===== */
+    .config-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 20px;
+    }
+    .config-card {
+      background: var(--bg-1); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 24px;
+    }
+    .config-card h3 {
+      color: #fff; font-size: 1.05rem; margin-bottom: 16px;
+      font-weight: 700; display: flex; align-items: center; gap: 8px;
+    }
+    .config-row {
+      display: flex; justify-content: space-between;
+      padding: 10px 0; border-bottom: 1px solid var(--border);
+      gap: 12px;
+    }
+    .config-row:last-child { border-bottom: 0; }
+    .config-row .label { color: var(--text-muted); font-size: 0.88rem; }
+    .config-row .value { color: #fff; font-weight: 600; text-align: right; word-break: break-word; font-size: 0.92rem; }
+
+    /* ===== Modal ===== */
+    .modal-overlay {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.7); backdrop-filter: blur(4px);
+      display: none; align-items: center; justify-content: center;
+      z-index: 200; padding: 20px;
+    }
+    .modal-overlay.open { display: flex; animation: fadeIn 0.2s; }
+    .modal {
+      background: var(--bg-1); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 28px;
+      max-width: 480px; width: 100%;
+      box-shadow: var(--shadow);
+      animation: modalIn 0.25s;
+    }
+    @keyframes modalIn { from { opacity: 0; transform: translateY(10px) scale(0.98); } to { opacity: 1; transform: none; } }
+    .modal h3 { color: #fff; font-size: 1.2rem; margin-bottom: 18px; font-weight: 700; }
+    .modal .form-group { margin-bottom: 14px; }
+    .modal .form-group label { display: block; margin-bottom: 5px; color: var(--text-muted); font-size: 0.85rem; font-weight: 600; }
+    .modal .form-group input, .modal .form-group select, .modal .form-group textarea {
+      width: 100%; padding: 10px 12px;
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: var(--radius-sm); color: #fff;
+      font-family: inherit; font-size: 0.95rem;
+    }
+    .modal .form-group input:focus, .modal .form-group select:focus, .modal .form-group textarea:focus { outline: none; border-color: var(--primary); }
+    .modal .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 22px; }
+
+    /* ===== Toast ===== */
+    .toast-container {
+      position: fixed; bottom: 24px; right: 24px;
+      z-index: 300; display: flex; flex-direction: column; gap: 10px;
+      max-width: 360px;
+    }
+    .toast {
+      background: var(--bg-2); border: 1px solid var(--border);
+      border-left: 4px solid var(--primary);
+      border-radius: var(--radius-sm);
+      padding: 12px 16px;
+      box-shadow: var(--shadow);
+      display: flex; align-items: flex-start; gap: 10px;
+      animation: toastIn 0.25s;
+      color: var(--text);
+      font-size: 0.9rem;
+    }
+    .toast.success { border-left-color: var(--primary); }
+    .toast.error { border-left-color: var(--danger); }
+    .toast.info { border-left-color: var(--info); }
+    .toast.warn { border-left-color: var(--warn); }
+    .toast .toast-icon { font-size: 1.1rem; flex-shrink: 0; }
+    .toast .toast-body { flex: 1; }
+    .toast .toast-title { font-weight: 700; color: #fff; }
+    .toast .toast-msg { color: var(--text-muted); font-size: 0.85rem; margin-top: 2px; }
+    @keyframes toastIn { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: none; } }
+    @keyframes toastOut { to { opacity: 0; transform: translateX(20px); } }
+
+    /* ===== Mobile ===== */
+    @media (max-width: 900px) {
+      .kpis-grid { grid-template-columns: repeat(2, 1fr); }
+      .config-grid { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 640px) {
+      .container { padding: 0 16px; }
+      .header-inner { flex-wrap: wrap; gap: 8px; }
+      .header-actions { width: 100%; justify-content: flex-end; }
+      .kpis-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
+      .kpi-card { padding: 16px 14px; }
+      .kpi-card .kpi-value { font-size: 1.8rem; }
+      .brand-text .tenant-name { display: none; }
+      th, td { padding: 10px 12px; font-size: 0.85rem; }
+      .hide-mobile { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="container header-inner">
+      <div class="brand">
+        <span class="logo-mark">
+          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 2C6.5 2 2 6.1 2 11.2c0 1.9.6 3.7 1.7 5.3L2 22l5.7-1.5c1.4.8 3 1.2 4.6 1.2 5.5 0 10-4.1 10-9.2S17.5 2 12 2z" fill="#fff"/>
+            <path d="M16.5 14.3c-.3-.1-1.6-.8-1.9-.9-.3-.1-.5-.1-.6.1-.2.3-.7 1-.8 1.1-.1.2-.3.2-.5.1-1.6-.8-2.7-1.5-3.7-3.3-.3-.5.3-.5.8-1.5.1-.2 0-.3 0-.5-.1-.1-.7-1.7-1-2.3-.3-.6-.5-.5-.6-.5h-.5c-.2 0-.5.1-.7.4-.3.4-.9 1-1 2-.1 1.1.3 2.2.4 2.4.1.2 1.5 2.5 3.7 3.6 2.4 1.2 2.4.8 2.9.7.4-.1 1.4-.6 1.6-1.2.2-.6.2-1 .1-1.2 0-.1-.2-.2-.5-.3z" fill="#22c55e"/>
+          </svg>
+        </span>
+        <div class="brand-text">
+          <div class="brand-name">Bot<span class="accent">WA</span> <span style="color:var(--text-dim);font-weight:400;">— Panel</span></div>
+          <div class="tenant-name" id="tenantName">Cargando…</div>
+        </div>
+      </div>
+      <div class="header-actions">
+        <span class="tenant-pill">tenant: <code id="tenantPill">—</code></span>
+        <a href="index.html" class="back-link">← Volver a la web</a>
+      </div>
+    </div>
+  </header>
+
+  <div class="demo-banner">
+    <strong>⚠️ Modo demo</strong> — pronto tendrás login con usuario y password. El acceso actual es por URL con tu slug.
+  </div>
+
+  <main class="container" style="padding-top:24px;padding-bottom:80px;">
+
+    <!-- Loading state -->
+    <div id="loadingState" class="state-wrap">
+      <div class="spinner"></div>
+      <h2>Cargando panel…</h2>
+      <p>Conectando con el servidor</p>
+    </div>
+
+    <!-- Error state -->
+    <div id="errorState" class="state-wrap" style="display:none;">
+      <div style="font-size:3rem;margin-bottom:12px;">⚠️</div>
+      <h2 id="errorTitle">No se pudo cargar el panel</h2>
+      <p id="errorMsg"></p>
+      <a href="index.html" class="btn btn-primary">← Volver al inicio</a>
+    </div>
+
+    <!-- Main content -->
+    <div id="mainContent" style="display:none;">
+
+      <!-- KPIs -->
+      <div class="kpis-grid" id="kpisGrid">
+        <div class="kpi-card success">
+          <span class="kpi-icon">📊</span>
+          <div class="kpi-label">Citas hoy</div>
+          <div class="kpi-value" id="kpiHoy">0</div>
+          <div class="kpi-sub">agendadas para hoy</div>
+        </div>
+        <div class="kpi-card warn">
+          <span class="kpi-icon">⏳</span>
+          <div class="kpi-label">Pendientes</div>
+          <div class="kpi-value" id="kpiPend">0</div>
+          <div class="kpi-sub">esperando aprobación</div>
+        </div>
+        <div class="kpi-card info">
+          <span class="kpi-icon">✅</span>
+          <div class="kpi-label">Activas</div>
+          <div class="kpi-value" id="kpiActivas">0</div>
+          <div class="kpi-sub">confirmadas totales</div>
+        </div>
+        <div class="kpi-card">
+          <span class="kpi-icon">💬</span>
+          <div class="kpi-label">Conversaciones</div>
+          <div class="kpi-value" id="kpiConv">0</div>
+          <div class="kpi-sub">clientes únicos</div>
+        </div>
+      </div>
+
+      <!-- Tabs -->
+      <div class="tabs">
+        <button class="tab active" data-tab="citas">
+          📅 Citas <span class="count" id="countCitas">0</span>
+        </button>
+        <button class="tab" data-tab="servicios">
+          🔧 Servicios <span class="count" id="countServ">0</span>
+        </button>
+        <button class="tab" data-tab="config">
+          ⚙️ Configuración
+        </button>
+      </div>
+
+      <!-- TAB: Citas -->
+      <div class="tab-content active" id="tab-citas">
+        <div class="filters-bar">
+          <button class="filter-pill active" data-filter="todas">Todas</button>
+          <button class="filter-pill" data-filter="pendiente">⏳ Pendientes</button>
+          <button class="filter-pill" data-filter="aprobada">✅ Aprobadas</button>
+          <button class="filter-pill" data-filter="rechazada">✗ Rechazadas</button>
+          <button class="filter-pill" data-filter="hoy">📅 Hoy</button>
+          <div class="spacer"></div>
+          <span class="reload-info"><span class="dot"></span> Auto-refresh cada 30s</span>
+        </div>
+        <div class="table-wrap">
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Fecha y hora</th>
+                  <th class="hide-mobile">Servicio</th>
+                  <th>Cliente</th>
+                  <th class="hide-mobile">Teléfono</th>
+                  <th>Estado</th>
+                  <th>Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="citasBody">
+                <tr class="empty-row"><td colspan="6"><span class="emoji">⏳</span>Cargando citas…</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB: Servicios -->
+      <div class="tab-content" id="tab-servicios">
+        <div class="table-toolbar">
+          <h3>Servicios del negocio</h3>
+          <button class="btn btn-primary btn-sm" id="newServBtn">+ Nuevo servicio</button>
+        </div>
+        <div class="table-wrap">
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Nombre</th>
+                  <th>Categoría</th>
+                  <th>Precio</th>
+                  <th class="hide-mobile">Duración</th>
+                  <th>Estado</th>
+                  <th>Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="servBody">
+                <tr class="empty-row"><td colspan="6"><span class="emoji">⏳</span>Cargando servicios…</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB: Config -->
+      <div class="tab-content" id="tab-config">
+        <div class="config-grid">
+          <div class="config-card">
+            <h3>📋 Información del negocio</h3>
+            <div id="configBusiness"></div>
+          </div>
+          <div class="config-card">
+            <h3>🔧 Estado técnico</h3>
+            <div id="configTech"></div>
+          </div>
+        </div>
+        <p style="margin-top:20px;color:var(--text-dim);font-size:0.85rem;">
+          💡 La edición de estos campos estará disponible próximamente. Por ahora, para cambios contacta al equipo de BotWA por WhatsApp: <a href="https://wa.me/584167775771" target="_blank" rel="noopener">+58 416-7775771</a>.
+        </p>
+      </div>
+    </div>
+  </main>
+
+  <!-- Modal: Servicio -->
+  <div class="modal-overlay" id="servModal">
+    <div class="modal">
+      <h3 id="servModalTitle">Nuevo servicio</h3>
+      <form id="servForm">
+        <input type="hidden" id="servId">
+        <div class="form-group">
+          <label for="servNombre">Nombre *</label>
+          <input type="text" id="servNombre" required placeholder="Ej: Cambio de aceite">
+        </div>
+        <div class="form-group">
+          <label for="servDescripcion">Descripción</label>
+          <textarea id="servDescripcion" rows="2" placeholder="Breve descripción del servicio"></textarea>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="servCategoria">Categoría</label>
+            <input type="text" id="servCategoria" placeholder="Ej: Mantenimiento">
+          </div>
+          <div class="form-group">
+            <label for="servPrecio">Precio</label>
+            <input type="number" id="servPrecio" min="0" step="any" placeholder="0">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="servDuracion">Duración (min)</label>
+            <input type="number" id="servDuracion" min="0" placeholder="60">
+          </div>
+          <div class="form-group">
+            <label for="servActivo">Estado</label>
+            <select id="servActivo">
+              <option value="1">Activo</option>
+              <option value="0">Inactivo</option>
+            </select>
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-secondary" id="servCancel">Cancelar</button>
+          <button type="submit" class="btn btn-primary" id="servSubmit">Guardar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: Rechazar cita -->
+  <div class="modal-overlay" id="rechazoModal">
+    <div class="modal">
+      <h3>Rechazar cita</h3>
+      <form id="rechazoForm">
+        <input type="hidden" id="rechazoCitaId">
+        <div class="form-group">
+          <label for="rechazoMotivo">Motivo del rechazo (se enviará al cliente por WhatsApp)</label>
+          <textarea id="rechazoMotivo" rows="3" placeholder="Ej: No tenemos disponibilidad para esa fecha, ¿te proponemos otro día?" required></textarea>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-secondary" id="rechazoCancel">Cancelar</button>
+          <button type="submit" class="btn btn-danger">Rechazar cita</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="toast-container" id="toastContainer"></div>
+
+  <script>
+    const WORKER_URL = 'https://sgc-saas.activo.workers.dev';
+
+    // ===== Resolve slug from URL =====
+    const urlParams = new URLSearchParams(window.location.search);
+    const SLUG = urlParams.get('t') || '';
+
+    if (!SLUG) {
+      showError('Falta el slug del tenant', 'La URL debe incluir ?t=<slug>. Ejemplo: /admin?t=sgc');
+    } else {
+      document.getElementById('tenantPill').textContent = SLUG;
+      init();
+    }
+
+    // ===== State =====
+    let tenantInfo = null;
+    let currentFilter = 'todas';
+    let refreshTimer = null;
+    let citasList = [];
+
+    async function init() {
+      try {
+        await loadDashboard();
+        document.getElementById('loadingState').style.display = 'none';
+        document.getElementById('mainContent').style.display = 'block';
+        await loadCitas();
+        await loadServicios();
+        startAutoRefresh();
+      } catch (err) {
+        console.error('init error', err);
+        showError(err.status === 404 ? 'Tenant no encontrado' : 'Error de conexión', err.message);
+      }
+    }
+
+    function showError(title, msg) {
+      document.getElementById('loadingState').style.display = 'none';
+      document.getElementById('errorState').style.display = 'block';
+      document.getElementById('errorTitle').textContent = title;
+      document.getElementById('errorMsg').textContent = msg;
+    }
+
+    async function apiGet(path) {
+      const res = await fetch(`${WORKER_URL}${path}`);
+      if (!res.ok) {
+        const err = new Error(`HTTP ${res.status}`);
+        err.status = res.status;
+        try { const j = await res.json(); err.message = j.error || err.message; } catch (_) {}
+        throw err;
+      }
+      return res.json();
+    }
+    async function apiPost(path, body) {
+      const res = await fetch(`${WORKER_URL}${path}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body || {})
+      });
+      if (!res.ok) {
+        const err = new Error(`HTTP ${res.status}`);
+        err.status = res.status;
+        try { const j = await res.json(); err.message = j.error || err.message; } catch (_) {}
+        throw err;
+      }
+      return res.json();
+    }
+    async function apiPut(path, body) {
+      const res = await fetch(`${WORKER_URL}${path}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body || {})
+      });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      return res.json();
+    }
+    async function apiDelete(path) {
+      const res = await fetch(`${WORKER_URL}${path}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      return res.json();
+    }
+
+    // ===== Dashboard / KPIs =====
+    async function loadDashboard() {
+      const data = await apiGet(`/api/tenant/dashboard?t=${encodeURIComponent(SLUG)}`);
+      tenantInfo = data.tenant;
+      const k = data.kpis || {};
+      document.getElementById('tenantName').textContent = tenantInfo.business_name || tenantInfo.slug;
+      document.getElementById('kpiHoy').textContent = k.citas_hoy ?? 0;
+      document.getElementById('kpiPend').textContent = k.citas_pendientes ?? 0;
+      document.getElementById('kpiActivas').textContent = k.citas_activas ?? 0;
+      document.getElementById('kpiConv').textContent = k.conversaciones_unicas ?? 0;
+      renderConfig();
+    }
+
+    // ===== Citas =====
+    async function loadCitas() {
+      try {
+        // Use the filter param if not "todas"
+        const query = currentFilter && currentFilter !== 'todas'
+          ? `&estado=${encodeURIComponent(currentFilter)}`
+          : '';
+        const data = await apiGet(`/api/tenant/citas?t=${encodeURIComponent(SLUG)}${query}`);
+        citasList = Array.isArray(data.citas) ? data.citas : [];
+        renderCitas();
+        document.getElementById('countCitas').textContent = citasList.length;
+      } catch (err) {
+        console.error('loadCitas', err);
+        document.getElementById('citasBody').innerHTML = `<tr class="empty-row"><td colspan="6"><span class="emoji">⚠️</span>Error al cargar citas: ${escapeHtml(err.message)}</td></tr>`;
+      }
+    }
+
+    function renderCitas() {
+      const body = document.getElementById('citasBody');
+      if (!citasList.length) {
+        body.innerHTML = `<tr class="empty-row"><td colspan="6"><span class="emoji">📭</span>No hay citas para este filtro</td></tr>`;
+        return;
+      }
+      body.innerHTML = citasList.map(c => {
+        const estado = c.estado_aprobacion || 'pendiente';
+        const badgeClass = estado === 'aprobada' ? 'badge-approved' : estado === 'rechazada' ? 'badge-rejected' : 'badge-pending';
+        const estadoLabel = estado === 'aprobada' ? 'Aprobada' : estado === 'rechazada' ? 'Rechazada' : 'Pendiente';
+        const clienteSub = [c.marca, c.modelo, c.patente].filter(x => x && x !== 'null' && x !== '').join(' ');
+        const fechaFmt = formatDate(c.fecha_cita) + ' · ' + (c.hora_cita || '');
+        return `
+          <tr>
+            <td>
+              <div class="cell-strong">${escapeHtml(fechaFmt)}</div>
+              <div class="cell-sub">${c.duracion_minutos ? c.duracion_minutos + ' min' : ''}</div>
+            </td>
+            <td class="hide-mobile">
+              <div class="cell-strong">${escapeHtml(c.servicio || '—')}</div>
+              ${c.tipo_atencion ? `<div class="cell-sub">${escapeHtml(c.tipo_atencion)}</div>` : ''}
+            </td>
+            <td>
+              <div class="cell-strong">${escapeHtml(c.nombre_cliente || '—')}</div>
+              ${clienteSub ? `<div class="cell-sub">${escapeHtml(clienteSub)}</div>` : ''}
+            </td>
+            <td class="hide-mobile cell-mono">${escapeHtml(c.telefono || '—')}</td>
+            <td><span class="badge ${badgeClass}">${estadoLabel}</span></td>
+            <td>
+              <div class="action-btns">
+                ${estado === 'pendiente' ? `
+                  <button class="icon-btn approve" title="Aprobar" onclick="aprobarCita(${c.id})">✓</button>
+                  <button class="icon-btn reject" title="Rechazar" onclick="abrirRechazo(${c.id})">✗</button>
+                ` : estado === 'aprobada' ? `
+                  <button class="icon-btn reject" title="Rechazar" onclick="abrirRechazo(${c.id})">✗</button>
+                ` : `
+                  <span style="color:var(--text-dim);font-size:0.78rem;">—</span>
+                `}
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function formatDate(s) {
+      if (!s) return '—';
+      // s may be 'YYYY-MM-DD' or 'YYYY-MM-DD HH:mm:ss'
+      const d = new Date(s + (s.length === 10 ? 'T00:00:00' : ''));
+      if (isNaN(d.getTime())) return s;
+      return d.toLocaleDateString('es-CL', { day: '2-digit', month: 'short', year: 'numeric' });
+    }
+
+    window.aprobarCita = async function(id) {
+      if (!confirm('¿Aprobar esta cita? Se enviará confirmación al cliente por WhatsApp.')) return;
+      try {
+        await apiPost(`/api/tenant/citas/${id}/aprobar?t=${encodeURIComponent(SLUG)}`);
+        toast('success', 'Cita aprobada', 'Se envió confirmación por WhatsApp al cliente.');
+        await loadCitas();
+        await loadDashboard();
+      } catch (err) {
+        toast('error', 'Error al aprobar', err.message);
+      }
+    };
+
+    window.abrirRechazo = function(id) {
+      document.getElementById('rechazoCitaId').value = id;
+      document.getElementById('rechazoMotivo').value = '';
+      document.getElementById('rechazoModal').classList.add('open');
+      setTimeout(() => document.getElementById('rechazoMotivo').focus(), 100);
+    };
+
+    document.getElementById('rechazoCancel').addEventListener('click', () => {
+      document.getElementById('rechazoModal').classList.remove('open');
+    });
+    document.getElementById('rechazoForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const id = document.getElementById('rechazoCitaId').value;
+      const motivo = document.getElementById('rechazoMotivo').value.trim();
+      if (!motivo) return;
+      try {
+        await apiPost(`/api/tenant/citas/${id}/rechazar?t=${encodeURIComponent(SLUG)}`, { motivo });
+        document.getElementById('rechazoModal').classList.remove('open');
+        toast('info', 'Cita rechazada', 'Se envió el motivo al cliente por WhatsApp.');
+        await loadCitas();
+        await loadDashboard();
+      } catch (err) {
+        toast('error', 'Error al rechazar', err.message);
+      }
+    });
+
+    // Filters
+    document.querySelectorAll('.filters-bar .filter-pill').forEach(p => {
+      p.addEventListener('click', () => {
+        document.querySelectorAll('.filters-bar .filter-pill').forEach(x => x.classList.remove('active'));
+        p.classList.add('active');
+        currentFilter = p.getAttribute('data-filter');
+        loadCitas();
+      });
+    });
+
+    // Auto-refresh
+    function startAutoRefresh() {
+      if (refreshTimer) clearInterval(refreshTimer);
+      refreshTimer = setInterval(async () => {
+        // Only refresh if user is on Citas tab
+        const tabCitasActive = document.querySelector('.tab.active').getAttribute('data-tab') === 'citas';
+        if (tabCitasActive) {
+          await loadCitas();
+        }
+      }, 30000);
+    }
+
+    // ===== Servicios =====
+    let serviciosList = [];
+    async function loadServicios() {
+      try {
+        const data = await apiGet(`/api/tenant/servicios?t=${encodeURIComponent(SLUG)}`);
+        serviciosList = Array.isArray(data.servicios) ? data.servicios : [];
+        renderServicios();
+        document.getElementById('countServ').textContent = serviciosList.length;
+      } catch (err) {
+        console.error('loadServicios', err);
+        document.getElementById('servBody').innerHTML = `<tr class="empty-row"><td colspan="6"><span class="emoji">⚠️</span>Error al cargar servicios: ${escapeHtml(err.message)}</td></tr>`;
+      }
+    }
+
+    function renderServicios() {
+      const body = document.getElementById('servBody');
+      if (!serviciosList.length) {
+        body.innerHTML = `<tr class="empty-row"><td colspan="6"><span class="emoji">📭</span>No tienes servicios. Crea el primero con "Nuevo servicio".</td></tr>`;
+        return;
+      }
+      body.innerHTML = serviciosList.map(s => {
+        const activo = s.activo == 1 || s.activo === true;
+        return `
+          <tr>
+            <td>
+              <div class="cell-strong">${escapeHtml(s.nombre || '—')}</div>
+              ${s.descripcion ? `<div class="cell-sub">${escapeHtml(s.descripcion)}</div>` : ''}
+            </td>
+            <td class="cell-mono">${escapeHtml(s.categoria || '—')}</td>
+            <td class="cell-strong">${s.precio != null ? '$' + Number(s.precio).toLocaleString('es-CL') : '—'}</td>
+            <td class="hide-mobile cell-mono">${s.duracion_minutos ? s.duracion_minutos + ' min' : '—'}</td>
+            <td><span class="badge ${activo ? 'badge-active' : 'badge-inactive'}">${activo ? 'Activo' : 'Inactivo'}</span></td>
+            <td>
+              <div class="action-btns">
+                <button class="icon-btn edit" title="Editar" onclick="editServ(${s.id})">✎</button>
+                <button class="icon-btn delete" title="Eliminar" onclick="delServ(${s.id})">🗑</button>
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    // Modal handlers
+    document.getElementById('newServBtn').addEventListener('click', () => openServModal());
+    document.getElementById('servCancel').addEventListener('click', () => closeServModal());
+
+    function openServModal(s) {
+      document.getElementById('servModalTitle').textContent = s ? 'Editar servicio' : 'Nuevo servicio';
+      document.getElementById('servId').value = s ? s.id : '';
+      document.getElementById('servNombre').value = s ? s.nombre || '' : '';
+      document.getElementById('servDescripcion').value = s ? s.descripcion || '' : '';
+      document.getElementById('servCategoria').value = s ? s.categoria || '' : '';
+      document.getElementById('servPrecio').value = s ? (s.precio ?? '') : '';
+      document.getElementById('servDuracion').value = s ? (s.duracion_minutos ?? '') : '';
+      document.getElementById('servActivo').value = s ? (s.activo == 1 || s.activo === true ? '1' : '0') : '1';
+      document.getElementById('servModal').classList.add('open');
+      setTimeout(() => document.getElementById('servNombre').focus(), 100);
+    }
+    function closeServModal() {
+      document.getElementById('servModal').classList.remove('open');
+    }
+
+    window.editServ = function(id) {
+      const s = serviciosList.find(x => x.id === id);
+      if (s) openServModal(s);
+    };
+
+    window.delServ = async function(id) {
+      const s = serviciosList.find(x => x.id === id);
+      if (!s) return;
+      if (!confirm(`¿Eliminar el servicio "${s.nombre}"?\n\nSe desactivará (soft-delete). Las citas históricas se conservan.`)) return;
+      try {
+        await apiDelete(`/api/tenant/servicios/${id}?t=${encodeURIComponent(SLUG)}`);
+        toast('success', 'Servicio eliminado', `Se desactivó "${s.nombre}".`);
+        await loadServicios();
+        await loadDashboard();
+      } catch (err) {
+        toast('error', 'Error al eliminar', err.message);
+      }
+    };
+
+    document.getElementById('servForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const id = document.getElementById('servId').value;
+      const payload = {
+        nombre: document.getElementById('servNombre').value.trim(),
+        descripcion: document.getElementById('servDescripcion').value.trim(),
+        categoria: document.getElementById('servCategoria').value.trim(),
+        precio: parseFloat(document.getElementById('servPrecio').value) || 0,
+        duracion_minutos: parseInt(document.getElementById('servDuracion').value, 10) || 0,
+        activo: parseInt(document.getElementById('servActivo').value, 10)
+      };
+      const btn = document.getElementById('servSubmit');
+      btn.disabled = true; btn.textContent = 'Guardando…';
+      try {
+        if (id) {
+          await apiPut(`/api/tenant/servicios/${id}?t=${encodeURIComponent(SLUG)}`, payload);
+          toast('success', 'Servicio actualizado', `"${payload.nombre}" guardado correctamente.`);
+        } else {
+          await apiPost(`/api/tenant/servicios?t=${encodeURIComponent(SLUG)}`, payload);
+          toast('success', 'Servicio creado', `"${payload.nombre}" agregado a tu catálogo.`);
+        }
+        closeServModal();
+        await loadServicios();
+        await loadDashboard();
+      } catch (err) {
+        toast('error', 'Error al guardar', err.message);
+      } finally {
+        btn.disabled = false; btn.textContent = 'Guardar';
+      }
+    });
+
+    // ===== Config =====
+    function renderConfig() {
+      if (!tenantInfo) return;
+      const t = tenantInfo;
+      const business = document.getElementById('configBusiness');
+      business.innerHTML = `
+        <div class="config-row"><span class="label">Nombre del negocio</span><span class="value">${escapeHtml(t.business_name || '—')}</span></div>
+        <div class="config-row"><span class="label">Rubro</span><span class="value">${escapeHtml(t.rubro || '—')}</span></div>
+        <div class="config-row"><span class="label">WhatsApp conectado</span><span class="value">${escapeHtml(t.whatsapp_number || '—')}</span></div>
+        <div class="config-row"><span class="label">Email</span><span class="value">${escapeHtml(t.email || '—')}</span></div>
+        <div class="config-row"><span class="label">Slug</span><span class="value">${escapeHtml(t.slug || '—')}</span></div>
+        <div class="config-row"><span class="label">Estado</span><span class="value"><span class="badge ${t.status === 'active' ? 'badge-active' : t.status === 'approved' ? 'badge-approved' : 'badge-pending'}">${escapeHtml(t.status || '—')}</span></span></div>
+      `;
+      const tech = document.getElementById('configTech');
+      tech.innerHTML = `
+        <div class="config-row"><span class="label">Instancia Evolution</span><span class="value">${escapeHtml(t.evolution_instance || '—')}</span></div>
+        <div class="config-row"><span class="label">Tono de IA</span><span class="value">${escapeHtml(t.ai_tone || 'default')}</span></div>
+        <div class="config-row"><span class="label">Creado</span><span class="value">${t.created_at ? formatDate(t.created_at.split(' ')[0]) : '—'}</span></div>
+        <div class="config-row"><span class="label">Aprobado</span><span class="value">${t.approved_at ? formatDate(t.approved_at.split(' ')[0]) : '—'}</span></div>
+        <div class="config-row"><span class="label">Activo desde</span><span class="value">${t.active_at ? formatDate(t.active_at.split(' ')[0]) : '—'}</span></div>
+      `;
+    }
+
+    // ===== Tabs =====
+    document.querySelectorAll('.tab').forEach(t => {
+      t.addEventListener('click', () => {
+        document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(x => x.classList.remove('active'));
+        t.classList.add('active');
+        const tab = t.getAttribute('data-tab');
+        document.getElementById('tab-' + tab).classList.add('active');
+        if (tab === 'servicios' && !serviciosList.length) loadServicios();
+        if (tab === 'citas') loadCitas();
+        if (tab === 'config') renderConfig();
+      });
+    });
+
+    // ===== Toast =====
+    function toast(type, title, msg) {
+      const icons = { success: '✅', error: '❌', info: 'ℹ️', warn: '⚠️' };
+      const el = document.createElement('div');
+      el.className = 'toast ' + type;
+      el.innerHTML = `
+        <span class="toast-icon">${icons[type] || '•'}</span>
+        <div class="toast-body">
+          <div class="toast-title">${escapeHtml(title)}</div>
+          ${msg ? `<div class="toast-msg">${escapeHtml(msg)}</div>` : ''}
+        </div>
+      `;
+      document.getElementById('toastContainer').appendChild(el);
+      setTimeout(() => {
+        el.style.animation = 'toastOut 0.3s forwards';
+        setTimeout(() => el.remove(), 300);
+      }, 4000);
+    }
+
+    // Close modals on overlay click
+    document.querySelectorAll('.modal-overlay').forEach(o => {
+      o.addEventListener('click', (e) => {
+        if (e.target === o) o.classList.remove('open');
+      });
+    });
+
+    // Esc closes modals
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        document.querySelectorAll('.modal-overlay.open').forEach(o => o.classList.remove('open'));
+      }
+    });
+
+    function escapeHtml(s) {
+      if (s == null) return '';
+      return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+  </script>
+</body>
+</html>

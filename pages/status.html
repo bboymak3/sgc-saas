@@ -3,148 +3,531 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Estado de mi solicitud — Bot WhatsApp</title>
+  <title>Estado de mi solicitud — BotWA</title>
+  <meta name="robots" content="noindex,nofollow">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%2322c55e'/%3E%3Cpath d='M32 12c-11 0-20 8.5-20 19 0 3.6 1 7 3 10L12 52l11.5-3c2.8 1.5 6 2.3 9.3 2.3 11 0 20-8.5 20-19S43 12 32 12z' fill='%23fff'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0a0a0a; color: #e8e8e8; min-height: 100vh; padding: 40px 20px; }
-    .container { max-width: 600px; margin: 0 auto; }
-    .card { background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 16px; padding: 32px; margin-bottom: 20px; }
-    h1 { color: #22c55e; margin-bottom: 8px; }
-    .subtitle { color: #aaa; margin-bottom: 24px; }
-    .status-pending { background: rgba(251,191,36,0.1); color: #fbbf24; padding: 12px; border-radius: 8px; border: 1px solid #fbbf24; margin-bottom: 16px; }
-    .status-approved { background: rgba(34,197,94,0.1); color: #22c55e; padding: 12px; border-radius: 8px; border: 1px solid #22c55e; margin-bottom: 16px; }
-    .status-rejected { background: rgba(239,68,68,0.1); color: #ef4444; padding: 12px; border-radius: 8px; border: 1px solid #ef4444; margin-bottom: 16px; }
-    .status-active { background: rgba(34,197,94,0.1); color: #22c55e; padding: 12px; border-radius: 8px; border: 1px solid #22c55e; margin-bottom: 16px; }
-    .info { margin: 16px 0; }
-    .info-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #2a2a2a; }
-    .info-row .label { color: #aaa; }
-    .info-row .value { color: #fff; font-weight: 600; }
-    .qr-box { text-align: center; margin: 24px 0; }
-    .qr-box img { max-width: 300px; border: 4px solid #fff; border-radius: 12px; padding: 12px; background: #fff; }
-    .instructions { background: #0a0a0a; padding: 16px; border-radius: 8px; margin-top: 16px; }
-    .instructions ol { padding-left: 20px; }
-    .instructions li { margin: 8px 0; color: #ccc; }
-    .btn { display: inline-block; padding: 12px 24px; background: #16a34a; color: #fff; text-decoration: none; border-radius: 8px; font-weight: 700; margin-top: 16px; }
-    .btn:hover { background: #15803d; }
-    .loading { text-align: center; padding: 40px; color: #aaa; }
-    .loading .spinner { display: inline-block; width: 32px; height: 32px; border: 3px solid #2a2a2a; border-top-color: #22c55e; border-radius: 50%; animation: spin 0.8s linear infinite; margin-bottom: 12px; }
+    :root {
+      --bg: #0a0a0a;
+      --bg-1: #111111;
+      --bg-2: #1a1a1a;
+      --border: #2a2a2a;
+      --text: #e8e8e8;
+      --text-muted: #999;
+      --text-dim: #666;
+      --primary: #22c55e;
+      --primary-dark: #16a34a;
+      --primary-darker: #15803d;
+      --danger: #ef4444;
+      --warn: #fbbf24;
+      --radius: 14px;
+      --radius-sm: 10px;
+      --shadow: 0 10px 40px rgba(0,0,0,0.4);
+    }
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--bg);
+      background-image: radial-gradient(circle at 70% -10%, rgba(34,197,94,0.08), transparent 50%);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 40px 20px;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+    .container { max-width: 640px; margin: 0 auto; }
+    a { color: var(--primary); }
+    .top-logo {
+      display: flex; align-items: center; justify-content: center; gap: 10px;
+      margin-bottom: 24px; text-decoration: none;
+    }
+    .top-logo:hover { text-decoration: none; }
+    .logo-mark {
+      width: 38px; height: 38px; border-radius: 10px;
+      background: linear-gradient(135deg, var(--primary), var(--primary-darker));
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 6px 20px rgba(34,197,94,0.35);
+    }
+    .logo-mark svg { width: 24px; height: 24px; }
+    .top-logo .name { font-weight: 800; font-size: 1.3rem; color: #fff; letter-spacing: -0.5px; }
+    .top-logo .name .accent { color: var(--primary); }
+
+    .card {
+      background: linear-gradient(180deg, var(--bg-2), var(--bg-1));
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 36px;
+      margin-bottom: 20px;
+      box-shadow: var(--shadow);
+      animation: cardIn 0.4s;
+    }
+    @keyframes cardIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+
+    .status-banner {
+      display: flex; align-items: center; gap: 14px;
+      padding: 16px 20px;
+      border-radius: var(--radius);
+      margin-bottom: 24px;
+      border: 1px solid;
+    }
+    .status-banner .icon { font-size: 1.8rem; flex-shrink: 0; }
+    .status-banner .body .title { font-weight: 700; font-size: 1.05rem; }
+    .status-banner .body .sub { font-size: 0.88rem; opacity: 0.85; margin-top: 2px; }
+    .status-pending { background: rgba(251,191,36,0.08); color: var(--warn); border-color: rgba(251,191,36,0.3); }
+    .status-approved { background: rgba(34,197,94,0.08); color: var(--primary); border-color: rgba(34,197,94,0.3); }
+    .status-active { background: rgba(34,197,94,0.08); color: var(--primary); border-color: rgba(34,197,94,0.3); }
+    .status-rejected { background: rgba(239,68,68,0.08); color: var(--danger); border-color: rgba(239,68,68,0.3); }
+    .status-suspended { background: rgba(239,68,68,0.08); color: var(--danger); border-color: rgba(239,68,68,0.3); }
+
+    h1 {
+      color: #fff; font-size: 1.7rem; font-weight: 800;
+      letter-spacing: -0.5px; margin-bottom: 4px;
+    }
+    .slug-line {
+      color: var(--text-muted); font-size: 0.88rem;
+      margin-bottom: 22px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+
+    .info-list {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      margin-bottom: 22px;
+    }
+    .info-row {
+      display: flex; justify-content: space-between;
+      padding: 12px 18px;
+      border-bottom: 1px solid var(--border);
+      gap: 12px;
+    }
+    .info-row:last-child { border-bottom: 0; }
+    .info-row .label { color: var(--text-muted); font-size: 0.9rem; }
+    .info-row .value { color: #fff; font-weight: 600; text-align: right; word-break: break-word; font-size: 0.92rem; }
+
+    .qr-section { text-align: center; padding: 8px 0; }
+    .qr-section h3 {
+      color: #fff; font-size: 1.15rem; margin-bottom: 8px;
+      font-weight: 700;
+    }
+    .qr-section .lead { color: var(--text-muted); margin-bottom: 22px; font-size: 0.95rem; }
+
+    .qr-frame {
+      display: inline-block; padding: 18px;
+      background: #fff; border-radius: 18px;
+      margin: 0 auto 22px;
+      box-shadow: 0 12px 40px rgba(34,197,94,0.18);
+      position: relative;
+      min-width: 260px; min-height: 260px;
+    }
+    .qr-frame img {
+      display: block; width: 240px; height: 240px;
+      object-fit: contain;
+    }
+    .qr-fallback {
+      width: 240px; height: 240px;
+      display: flex; align-items: center; justify-content: center;
+      flex-direction: column; gap: 8px;
+      color: #444;
+      font-size: 0.85rem;
+      text-align: center;
+      padding: 20px;
+    }
+    .qr-fallback .icon { font-size: 3rem; }
+    .qr-corner {
+      position: absolute; width: 24px; height: 24px;
+      border: 3px solid var(--primary);
+    }
+    .qr-corner.tl { top: 6px; left: 6px; border-right: 0; border-bottom: 0; border-radius: 6px 0 0 0; }
+    .qr-corner.tr { top: 6px; right: 6px; border-left: 0; border-bottom: 0; border-radius: 0 6px 0 0; }
+    .qr-corner.bl { bottom: 6px; left: 6px; border-right: 0; border-top: 0; border-radius: 0 0 0 6px; }
+    .qr-corner.br { bottom: 6px; right: 6px; border-left: 0; border-top: 0; border-radius: 0 0 6px 0; }
+
+    .instructions {
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 22px 22px 22px 22px;
+      margin: 22px 0;
+      text-align: left;
+    }
+    .instructions h4 {
+      color: #fff; font-size: 0.95rem; margin-bottom: 14px;
+      font-weight: 700;
+    }
+    .instructions ol {
+      list-style: none; counter-reset: step;
+      padding: 0;
+    }
+    .instructions ol li {
+      counter-increment: step;
+      display: flex; gap: 12px; padding: 8px 0;
+      color: var(--text); font-size: 0.92rem;
+      align-items: flex-start;
+    }
+    .instructions ol li::before {
+      content: counter(step);
+      flex-shrink: 0;
+      width: 24px; height: 24px; line-height: 24px;
+      background: rgba(34,197,94,0.12); color: var(--primary);
+      border-radius: 50%;
+      text-align: center; font-size: 0.78rem; font-weight: 700;
+      margin-top: 1px;
+    }
+
+    .note-card {
+      background: rgba(34,197,94,0.05); border: 1px solid rgba(34,197,94,0.25);
+      border-radius: var(--radius);
+      padding: 14px 18px;
+      margin: 16px 0;
+      color: var(--primary); font-size: 0.9rem;
+      display: flex; gap: 10px; align-items: flex-start;
+    }
+    .note-card .icon { flex-shrink: 0; font-size: 1.1rem; }
+
+    .actions-row {
+      display: flex; gap: 12px; flex-wrap: wrap; margin-top: 22px;
+    }
+    .btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 12px 22px;
+      border-radius: 999px;
+      font-weight: 700; font-size: 0.95rem;
+      cursor: pointer; border: 0;
+      font-family: inherit;
+      transition: all 0.2s; text-decoration: none;
+    }
+    .btn-primary { background: var(--primary); color: #042713; }
+    .btn-primary:hover { background: #fff; text-decoration: none; }
+    .btn-secondary { background: var(--bg-2); color: #fff; border: 1px solid var(--border); }
+    .btn-secondary:hover { border-color: var(--primary); text-decoration: none; }
+
+    .copy-pill {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: var(--bg-2); border: 1px solid var(--border);
+      padding: 8px 14px; border-radius: 999px;
+      font-size: 0.85rem; color: var(--text-muted);
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    .copy-pill code { color: var(--primary); }
+
+    .loading-wrap { text-align: center; padding: 80px 20px; }
+    .spinner {
+      width: 44px; height: 44px;
+      border: 3px solid var(--border);
+      border-top-color: var(--primary);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto 16px;
+    }
     @keyframes spin { to { transform: rotate(360deg); } }
+    .loading-wrap p { color: var(--text-muted); }
+
+    .auto-refresh-tag {
+      text-align: center; color: var(--text-dim); font-size: 0.78rem;
+      margin-top: 14px;
+      display: inline-flex; align-items: center; gap: 6px;
+    }
+    .auto-refresh-tag .dot {
+      width: 6px; height: 6px; background: var(--primary); border-radius: 50%;
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+    .toast {
+      position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+      background: var(--bg-2); border: 1px solid var(--border);
+      border-left: 4px solid var(--primary);
+      border-radius: var(--radius-sm);
+      padding: 12px 18px;
+      box-shadow: var(--shadow);
+      color: #fff; font-size: 0.9rem; font-weight: 600;
+      z-index: 100;
+      animation: toastIn 0.25s;
+    }
+    @keyframes toastIn { from { opacity: 0; transform: translate(-50%, 10px); } to { opacity: 1; transform: translateX(-50%); } }
+
+    @media (max-width: 640px) {
+      body { padding: 24px 16px; }
+      .card { padding: 24px; }
+      h1 { font-size: 1.4rem; }
+      .qr-frame { min-width: 220px; min-height: 220px; padding: 14px; }
+      .qr-frame img, .qr-fallback { width: 200px; height: 200px; }
+    }
   </style>
 </head>
 <body>
+  <a href="index.html" class="top-logo">
+    <span class="logo-mark">
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M12 2C6.5 2 2 6.1 2 11.2c0 1.9.6 3.7 1.7 5.3L2 22l5.7-1.5c1.4.8 3 1.2 4.6 1.2 5.5 0 10-4.1 10-9.2S17.5 2 12 2z" fill="#fff"/>
+      </svg>
+    </span>
+    <span class="name">Bot<span class="accent">WA</span></span>
+  </a>
+
   <div class="container">
     <div id="content">
-      <div class="loading">
+      <div class="loading-wrap">
         <div class="spinner"></div>
-        <p>Cargando estado...</p>
+        <p>Cargando estado…</p>
       </div>
     </div>
   </div>
-  
+
   <script>
+    const WORKER_URL = 'https://sgc-saas.activo.workers.dev';
     const urlParams = new URLSearchParams(window.location.search);
     const slug = urlParams.get('slug');
-    
+
     if (!slug) {
-      document.getElementById('content').innerHTML = '<div class="card"><h1>Slug requerido</h1><p class="subtitle">Necesitas un slug para ver el estado.</p><a href="index.html" class="btn">← Volver al inicio</a></div>';
+      document.getElementById('content').innerHTML = `
+        <div class="card">
+          <h1>Slug requerido</h1>
+          <p style="color:var(--text-muted);margin-top:8px;">Necesitas un slug para ver el estado de tu solicitud. Revisa el link que te dimos al registrarte.</p>
+          <div class="actions-row">
+            <a href="index.html" class="btn btn-primary">← Volver al inicio</a>
+          </div>
+        </div>
+      `;
     } else {
       checkStatus();
-      // Auto-refresh cada 15s si está pending
       setInterval(checkStatus, 15000);
     }
-    
+
+    function escapeHtml(s) {
+      if (s == null) return '';
+      return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+    function fmtDate(s) {
+      if (!s) return '—';
+      const d = new Date(s + (s.length === 10 ? 'T00:00:00' : 'Z'));
+      if (isNaN(d.getTime())) return escapeHtml(s);
+      return d.toLocaleString('es-CL', { dateStyle: 'medium', timeStyle: 'short' });
+    }
+
     async function checkStatus() {
       try {
-        const res = await fetch(`https://sgc-saas.activo.workers.dev/api/onboarding/status?slug=${slug}`);
+        const res = await fetch(`${WORKER_URL}/api/onboarding/status?slug=${encodeURIComponent(slug)}`);
         const data = await res.json();
-        
+
         if (!data.success) {
-          document.getElementById('content').innerHTML = '<div class="card"><h1>Error</h1><p class="subtitle">' + data.error + '</p><a href="index.html" class="btn">← Volver al inicio</a></div>';
+          document.getElementById('content').innerHTML = `
+            <div class="card">
+              <h1>⚠️ Error</h1>
+              <p style="color:var(--text-muted);margin-top:8px;">${escapeHtml(data.error || 'No se pudo obtener el estado')}</p>
+              <div class="actions-row">
+                <a href="index.html" class="btn btn-primary">← Volver al inicio</a>
+              </div>
+            </div>
+          `;
           return;
         }
-        
+
         const t = data.tenant;
-        let statusClass = 'status-pending';
-        let statusText = 'Pendiente de aprobación';
-        let statusIcon = '⏳';
+        let bannerClass = 'status-pending';
+        let bannerIcon = '⏳';
+        let bannerTitle = 'Pendiente de aprobación';
+        let bannerSub = 'Estamos validando tu solicitud…';
         let extraHtml = '';
-        
+        let actionsHtml = `<a href="index.html" class="btn btn-secondary">← Volver al inicio</a>`;
+
         if (t.status === 'pending_approval') {
-          statusClass = 'status-pending';
-          statusText = 'Pendiente de aprobación';
-          statusIcon = '⏳';
-          extraHtml = '<p style="margin-top:16px;color:#aaa;">Estamos validando tu solicitud. Te avisaremos por WhatsApp en cuanto sea aprobada. Esta página se actualiza automáticamente cada 15 segundos.</p>';
+          bannerClass = 'status-pending';
+          bannerIcon = '⏳';
+          bannerTitle = 'Pendiente de aprobación';
+          bannerSub = 'Estamos validando tu solicitud. Te avisaremos por WhatsApp en cuanto sea aprobada.';
+          extraHtml = `
+            <div class="note-card">
+              <span class="icon">📲</span>
+              <span>Te contactaremos al WhatsApp <strong>${escapeHtml(t.whatsapp_number || '')}</strong> en cuanto sea aprobada (generalmente en minutos).</span>
+            </div>
+            <p class="auto-refresh-tag"><span class="dot"></span> Esta página se actualiza automáticamente cada 15 segundos</p>
+          `;
         } else if (t.status === 'approved') {
-          statusClass = 'status-approved';
-          statusText = '¡Aprobado! Escanea el QR';
-          statusIcon = '✅';
+          bannerClass = 'status-approved';
+          bannerIcon = '✅';
+          bannerTitle = '¡Aprobado! Conecta tu WhatsApp';
+          bannerSub = 'Escanea el código QR para activar el bot en tu número.';
           if (data.qr_url) {
+            extraHtml = renderQRSection(data.qr_url, t);
+            actionsHtml = `
+              <a href="${escapeHtml(data.qr_url)}" target="_blank" rel="noopener" class="btn btn-primary">📱 Abrir QR en nueva pestaña</a>
+              <a href="https://wa.me/${escapeHtml((t.whatsapp_number || '').replace(/[^0-9]/g, ''))}" target="_blank" rel="noopener" class="btn btn-secondary">💬 Reenviar QR por WhatsApp</a>
+            `;
+          } else {
             extraHtml = `
-              <div class="qr-box">
-                <h3 style="margin-bottom:16px;">📱 Escanea este QR</h3>
-                <iframe src="${data.qr_url}" style="display:none;"></iframe>
-                <p>Para conectar tu WhatsApp:</p>
-                <div class="instructions">
-                  <ol>
-                    <li>Abre WhatsApp en tu celular</li>
-                    <li>Ve a Configuración → Dispositivos vinculados</li>
-                    <li>Toca "Vincular dispositivo"</li>
-                    <li>Escanea el código QR</li>
-                  </ol>
-                </div>
-                <p style="margin-top:16px;color:#22c55e;"> También te enviamos el QR por WhatsApp al número que registraste.</p>
+              <div class="note-card">
+                <span class="icon">⏳</span>
+                <span>Estamos generando tu código QR. Te llegará por WhatsApp en segundos. Si no te llega en 2 minutos, escríbenos al +58 416-7775771.</span>
               </div>
             `;
-            // Cargar QR via API
-            fetchQR(data.qr_url);
           }
         } else if (t.status === 'active') {
-          statusClass = 'status-active';
-          statusText = '¡Bot activo!';
-          statusIcon = '🎉';
-          extraHtml = '<p style="margin-top:16px;color:#22c55e;font-size:1.1rem;">¡Tu bot está funcionando! Prueba escribiéndote desde otro WhatsApp.</p>';
+          bannerClass = 'status-active';
+          bannerIcon = '🎉';
+          bannerTitle = '¡Bot activo y funcionando!';
+          bannerSub = 'Tu asistente de WhatsApp ya está atendiendo clientes.';
+          const adminUrl = `${location.origin}/admin?t=${encodeURIComponent(t.slug)}`;
+          extraHtml = `
+            <div class="note-card">
+              <span class="icon">🚀</span>
+              <span>Tu bot está funcionando. Prueba escribiéndote desde otro WhatsApp para verlo en acción.</span>
+            </div>
+            <h3 style="color:#fff;font-size:1.1rem;margin:20px 0 10px;font-weight:700;">Panel de administración</h3>
+            <p style="color:var(--text-muted);margin-bottom:14px;font-size:0.92rem;">Gestiona tus citas, servicios y configuración desde tu panel exclusivo:</p>
+            <div class="copy-pill" style="margin-bottom:12px;">
+              <span>🔗</span>
+              <code id="adminLink">${escapeHtml(adminUrl)}</code>
+              <button id="copyBtn" style="background:none;border:0;color:var(--primary);cursor:pointer;font-weight:700;font-family:inherit;font-size:0.85rem;">Copiar</button>
+            </div>
+          `;
+          actionsHtml = `
+            <a href="/admin?t=${encodeURIComponent(t.slug)}" class="btn btn-primary">🚀 Abrir mi panel admin</a>
+            <a href="index.html" class="btn btn-secondary">← Volver al inicio</a>
+          `;
         } else if (t.status === 'rejected') {
-          statusClass = 'status-rejected';
-          statusText = 'Solicitud rechazada';
-          statusIcon = '❌';
-          extraHtml = '<p style="margin-top:16px;color:#ef4444;">Si crees que fue un error, escríbenos al +58 416-7775771.</p>';
+          bannerClass = 'status-rejected';
+          bannerIcon = '❌';
+          bannerTitle = 'Solicitud rechazada';
+          bannerSub = 'Tu solicitud no pudo ser aprobada en este momento.';
+          extraHtml = `
+            <div class="note-card" style="background:rgba(239,68,68,0.05);border-color:rgba(239,68,68,0.25);color:var(--danger);">
+              <span class="icon">💬</span>
+              <span>Si crees que fue un error, escríbenos al WhatsApp <a href="https://wa.me/584167775771" target="_blank" rel="noopener" style="color:var(--danger);font-weight:700;">+58 416-7775771</a> para revisarlo.</span>
+            </div>
+          `;
         } else if (t.status === 'suspended') {
-          statusClass = 'status-rejected';
-          statusText = 'Cuenta suspendida';
-          statusIcon = '⏸️';
+          bannerClass = 'status-suspended';
+          bannerIcon = '⏸️';
+          bannerTitle = 'Cuenta suspendida';
+          bannerSub = 'Tu cuenta está temporalmente suspendida.';
+          extraHtml = `
+            <div class="note-card" style="background:rgba(239,68,68,0.05);border-color:rgba(239,68,68,0.25);color:var(--danger);">
+              <span class="icon">💬</span>
+              <span>Para reactivar tu cuenta, contacta al WhatsApp <a href="https://wa.me/584167775771" target="_blank" rel="noopener" style="color:var(--danger);font-weight:700;">+58 416-7775771</a>.</span>
+            </div>
+          `;
         }
-        
+
         document.getElementById('content').innerHTML = `
           <div class="card">
-            <h1>${statusIcon} ${t.business_name}</h1>
-            <p class="subtitle">Slug: ${t.slug}</p>
-            <div class="${statusClass}">
-              <strong>${statusText}</strong>
+            <h1>${bannerIcon} ${escapeHtml(t.business_name || 'Mi negocio')}</h1>
+            <p class="slug-line">slug: ${escapeHtml(t.slug)}</p>
+
+            <div class="status-banner ${bannerClass}">
+              <span class="icon">${bannerIcon}</span>
+              <div class="body">
+                <div class="title">${bannerTitle}</div>
+                <div class="sub">${bannerSub}</div>
+              </div>
             </div>
-            <div class="info">
-              <div class="info-row"><span class="label">Rubro:</span><span class="value">${t.rubro}</span></div>
-              <div class="info-row"><span class="label">Creado:</span><span class="value">${new Date(t.created_at + 'Z').toLocaleString('es-CL')}</span></div>
-              ${t.approved_at ? `<div class="info-row"><span class="label">Aprobado:</span><span class="value">${new Date(t.approved_at + 'Z').toLocaleString('es-CL')}</span></div>` : ''}
-              ${t.active_at ? `<div class="info-row"><span class="label">Activo desde:</span><span class="value">${new Date(t.active_at + 'Z').toLocaleString('es-CL')}</span></div>` : ''}
+
+            <div class="info-list">
+              <div class="info-row"><span class="label">Rubro</span><span class="value">${escapeHtml(t.rubro || '—')}</span></div>
+              <div class="info-row"><span class="label">WhatsApp</span><span class="value">${escapeHtml(t.whatsapp_number || '—')}</span></div>
+              <div class="info-row"><span class="label">Creado</span><span class="value">${fmtDate(t.created_at)}</span></div>
+              ${t.approved_at ? `<div class="info-row"><span class="label">Aprobado</span><span class="value">${fmtDate(t.approved_at)}</span></div>` : ''}
+              ${t.active_at ? `<div class="info-row"><span class="label">Activo desde</span><span class="value">${fmtDate(t.active_at)}</span></div>` : ''}
             </div>
+
             ${extraHtml}
-            <a href="index.html" class="btn">← Volver al inicio</a>
+
+            <div class="actions-row">
+              ${actionsHtml}
+            </div>
           </div>
         `;
+
+        // Bind copy button if present
+        const copyBtn = document.getElementById('copyBtn');
+        if (copyBtn) {
+          copyBtn.addEventListener('click', () => {
+            const link = document.getElementById('adminLink').textContent;
+            navigator.clipboard.writeText(link).then(() => showToast('✓ Link copiado al portapapeles')).catch(() => showToast('No se pudo copiar. Cópialo manualmente.'));
+          });
+        }
       } catch (error) {
         console.error('Error:', error);
+        document.getElementById('content').innerHTML = `
+          <div class="card">
+            <h1>⚠️ Error de conexión</h1>
+            <p style="color:var(--text-muted);margin-top:8px;">No se pudo conectar con el servidor. ${escapeHtml(error.message || '')}</p>
+            <div class="actions-row">
+              <button onclick="location.reload()" class="btn btn-primary">Reintentar</button>
+              <a href="index.html" class="btn btn-secondary">← Volver al inicio</a>
+            </div>
+          </div>
+        `;
       }
     }
-    
-    async function fetchQR(qrUrl) {
-      try {
-        // La API de Evolution requiere apikey en header, no podemos llamarla directamente desde el browser
-        // En su lugar, mostramos el link
-        console.log('QR URL:', qrUrl);
-      } catch (e) {
-        console.error('QR fetch error:', e);
-      }
+
+    function renderQRSection(qrUrl, tenant) {
+      return `
+        <div class="qr-section">
+          <h3>📱 Escanea este código QR</h3>
+          <p class="lead">Abre WhatsApp en tu celular y escanea el código:</p>
+          <div class="qr-frame" id="qrFrame">
+            <span class="qr-corner tl"></span>
+            <span class="qr-corner tr"></span>
+            <span class="qr-corner bl"></span>
+            <span class="qr-corner br"></span>
+            <img id="qrImg" alt="Código QR para conectar WhatsApp" style="display:none;" />
+            <div class="qr-fallback" id="qrFallback">
+              <span class="icon">📡</span>
+              <strong>Cargando QR…</strong>
+              <span style="font-size:0.78rem;">Si no aparece en 5s, ábrelo con el botón de abajo.</span>
+            </div>
+          </div>
+
+          <div class="instructions">
+            <h4>📋 Pasos para conectar</h4>
+            <ol>
+              <li>Abre WhatsApp en tu celular</li>
+              <li>Ve a <strong>Configuración</strong> → <strong>Dispositivos vinculados</strong></li>
+              <li>Toca <strong>"Vincular dispositivo"</strong></li>
+              <li>Escanea el código QR que aparece arriba</li>
+              <li>¡Listo! El bot empezará a atender automáticamente</li>
+            </ol>
+          </div>
+
+          <div class="note-card">
+            <span class="icon">💬</span>
+            <span>También te enviamos el QR por WhatsApp al <strong>${escapeHtml(tenant.whatsapp_number || 'tu número')}</strong>. Si no lo recibiste, dale al botón "Reenviar QR".</span>
+          </div>
+        </div>
+      `;
     }
+
+    function showToast(msg) {
+      const t = document.createElement('div');
+      t.className = 'toast';
+      t.textContent = msg;
+      document.body.appendChild(t);
+      setTimeout(() => {
+        t.style.transition = 'opacity 0.3s';
+        t.style.opacity = '0';
+        setTimeout(() => t.remove(), 300);
+      }, 2500);
+    }
+
+    // Attempt to load QR image after each render (CORS may block; we handle gracefully)
+    const observer = new MutationObserver(() => {
+      const img = document.getElementById('qrImg');
+      if (img && !img.dataset.bound) {
+        img.dataset.bound = '1';
+        const src = document.querySelector('.btn-primary')?.href;
+        if (src) {
+          img.onload = () => { img.style.display = 'block'; const f = document.getElementById('qrFallback'); if (f) f.style.display = 'none'; };
+          img.onerror = () => { /* keep fallback visible */ };
+          img.src = src;
+        }
+      }
+    });
+    observer.observe(document.getElementById('content'), { childList: true, subtree: true });
   </script>
 </body>
 </html>
