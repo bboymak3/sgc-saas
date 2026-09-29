@@ -4,6 +4,10 @@ Esta actualización toca los 5 repos (rama `ccr-4e6b2ec7-k1drmk`). **El orden im
 (responden 401/503) si falta un secret, y el webhook de WhatsApp deja de responder hasta sincronizarlo.
 Tiempo estimado: 20–30 minutos. Corte de WhatsApp esperado: ~1 minuto (entre el paso 4 y el 5).
 
+> **Estado 2026-09-29 10:15 UTC:** pasos 1, 2 y 3 ya ejecutados en producción. Migraciones 0001–0006 aplicadas y
+> registradas en `d1_migrations`. Punto de restauración: `--timestamp=2026-09-29T10:10:57Z`. Continúa desde el paso 0
+> (secretos) y luego el paso 4.
+
 ## 0. Generar secretos
 
 ```bash
@@ -146,6 +150,6 @@ en `/admin?t=sgc` (panel del negocio) y en el panel de órdenes (sección Citas 
 
 - Workers: `npx wrangler rollback` en cada worker (vuelve a la versión anterior).
 - Pages: re-publica el deployment anterior desde el dashboard de Cloudflare.
-- Base: `npx wrangler d1 time-travel restore citas --bookmark=<bookmark del paso 1>`.
+- Base: `npx wrangler d1 time-travel restore citas --timestamp=2026-09-29T10:10:57Z` (o `--bookmark=<bookmark del paso 1>`)`.
   Ojo: las migraciones 0001, 0003 y 0005 cambian restricciones; el código viejo sigue funcionando con el esquema nuevo,
   así que normalmente **no** hace falta revertir la base al revertir el código.
