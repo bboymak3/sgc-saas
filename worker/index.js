@@ -1279,6 +1279,26 @@ async function resolveTenantForWebhook(env2, body, url) {
 }
 __name(resolveTenantForWebhook, "resolveTenantForWebhook");
 
+// ============================================================
+// Resolver tenant para el panel admin multi-tenant (auth por slug)
+// Devuelve { tenant } o { error, status }
+// ============================================================
+async function resolveTenantForAdminPanel(env2, url) {
+  const slug = url.searchParams.get("t") || url.searchParams.get("tenant");
+  if (!slug) {
+    return { error: "slug requerido (?t=<slug>)", status: 400 };
+  }
+  const tenant = await env2.DB.prepare("SELECT * FROM tenants WHERE slug = ?").bind(slug).first();
+  if (!tenant) {
+    return { error: "Tenant no encontrado", status: 404 };
+  }
+  if (tenant.status === "rejected") {
+    return { error: "Tenant rechazado", status: 403 };
+  }
+  return { tenant };
+}
+__name(resolveTenantForAdminPanel, "resolveTenantForAdminPanel");
+
 
 var index_default = {
   async fetch(request, env2) {
@@ -1740,6 +1760,289 @@ Lamentamos las molestias. Para m\xE1s informaci\xF3n o reagendar, contacte direc
       }
       if (path === "/api/whatsapp/test" && request.method === "GET") {
         return new Response(JSON.stringify({ ok: true, msg: "Webhook endpoint activo", time: new Date().toISOString() }), {
+          headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
+        });
+      }
+
+      // ============================================================
+      // TENANT ADMIN PANEL (multi-tenant) - auth simple por slug ?t=
+      // ============================================================
+      if (path === "/api/tenant/dashboard" && request.method === "GET") {
+        const { tenant, error, status } = await resolveTenantForAdminPanel(env2, url);
+        if (error) {
+          return new Response(JSON.stringify({ success: false, error }), {
+            status, headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
+          });
+        }
+        const tid = tenant.id;
+        const nowStat = new Date();
+        const chileStatStr = nowStat.toLocaleString("es-CL", { timeZone: "America/Santiago" });
+        const chileStat = new Date(chileStatStr);
+        const hoy = `${chileStat.getFullYear()}-${String(chileStat.getMonth() + 1).padStart(2, "0")}-${String(chileStat.getDate()).padStart(2, "0")}`;
+        const [totalCitas, citasHoy, pendientes, activas, conversaciones, serviciosCount] = await Promise.all([
+          env2.DB.prepare("SELECT COUNT(*) as c FROM sgc_cit_Citas WHERE tenant_id = ?").bind(tid).first(),
+          env2.DB.prepare("SELECT COUNT(*) as c FROM sgc_cit_Citas WHERE tenant_id = ? AND fecha_cita = ?").bind(tid, hoy).first(),
+          env2.DB.prepare("SELECT COUNT(*) as c FROM sgc_cit_Citas WHERE tenant_id = ? AND (estado_aprobacion = 'pendiente' OR estado_aprobacion IS NULL)").bind(tid).first(),
+          env2.DB.prepare("SELECT COUNT(*) as c FROM sgc_cit_Citas WHERE tenant_id = ? AND estado = 'confirmada'").bind(tid).first(),
+          env2.DB.prepare("SELECT COUNT(DISTINCT telefono) as c FROM sgc_cit_Citas WHERE tenant_id = ?").bind(tid).first(),
+          env2.DB.prepare("SELECT COUNT(*) as c FROM sgc_cit_servicios_unificados WHERE tenant_id = ? AND activo = 1").bind(tid).first()
+        ]);
+        return new Response(JSON.stringify({
+          success: true,
+          tenant: {
+            id: tenant.id,
+            slug: tenant.slug,
+            business_name: tenant.business_name,
+            rubro: tenant.rubro,
+            whatsapp_number: tenant.whatsapp_number,
+            email: tenant.email,
+            status: tenant.status,
+            evolution_instance: tenant.evolution_instance,
+            ai_tone: tenant.ai_tone,
+            created_at: tenant.created_at,
+            approved_at: tenant.approved_at,
+            active_at: tenant.active_at
+          },
+          kpis: {
+            citas_total: totalCitas?.c || 0,
+            citas_hoy: citasHoy?.c || 0,
+            citas_pendientes: pendientes?.c || 0,
+            citas_activas: activas?.c || 0,
+            conversaciones_unicas: conversaciones?.c || 0,
+            servicios_activos: serviciosCount?.c || 0
+          }
+        }), { headers: { ...CORS_HEADERS, "Content-Type": "application/json" } });
+      }
+
+      if (path === "/api/tenant/citas" && request.method === "GET") {
+        const { tenant, error, status } = await resolveTenantForAdminPanel(env2, url);
+        if (error) {
+          return new Response(JSON.stringify({ success: false, error }), {
+            status, headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
+          });
+        }
+        const tid = tenant.id;
+        const estado = url.searchParams.get("estado") || "";
+        const limit = parseInt(url.searchParams.get("limit") || "100");
+        let query = "SELECT id, patente, marca, modelo, anio, nombre_cliente, telefono, servicio, fecha_cita, hora_cita, duracion_minutos, estado, estado_aprobacion, motivo_rechazo, observaciones, canal, tipo_atencion, direccion, created_at FROM sgc_cit_Citas WHERE tenant_id = ?";
+        const params = [tid];
+        if (estado === "pendiente") query += " AND (estado_aprobacion = 'pendiente' OR estado_aprobacion IS NULL)";
+        else if (estado === "aprobada") query += " AND estado_aprobacion = 'aprobada'";
+        else if (estado === "rechazada") query += " AND estado_aprobacion = 'rechazada'";
+        else if (estado === "hoy") {
+          const nowStat = new Date();
+          const chileStatStr = nowStat.toLocaleString("es-CL", { timeZone: "America/Santiago" });
+          const chileStat = new Date(chileStatStr);
+          const hoy = `${chileStat.getFullYear()}-${String(chileStat.getMonth() + 1).padStart(2, "0")}-${String(chileStat.getDate()).padStart(2, "0")}`;
+          query += " AND fecha_cita = ?";
+          params.push(hoy);
+        }
+        query += " ORDER BY created_at DESC LIMIT ?";
+        params.push(limit);
+        const citas = await env2.DB.prepare(query).bind(...params).all();
+        const [totales, pendientesRes, aprobadasRes, rechazadasRes] = await Promise.all([
+          env2.DB.prepare("SELECT COUNT(*) as c FROM sgc_cit_Citas WHERE tenant_id = ?").bind(tid).first(),
+          env2.DB.prepare("SELECT COUNT(*) as c FROM sgc_cit_Citas WHERE tenant_id = ? AND (estado_aprobacion = 'pendiente' OR estado_aprobacion IS NULL)").bind(tid).first(),
+          env2.DB.prepare("SELECT COUNT(*) as c FROM sgc_cit_Citas WHERE tenant_id = ? AND estado_aprobacion = 'aprobada'").bind(tid).first(),
+          env2.DB.prepare("SELECT COUNT(*) as c FROM sgc_cit_Citas WHERE tenant_id = ? AND estado_aprobacion = 'rechazada'").bind(tid).first()
+        ]);
+        return new Response(JSON.stringify({
+          success: true,
+          citas: citas.results,
+          stats: {
+            total: totales?.c || 0,
+            pendientes: pendientesRes?.c || 0,
+            aprobadas: aprobadasRes?.c || 0,
+            rechazadas: rechazadasRes?.c || 0
+          }
+        }), { headers: { ...CORS_HEADERS, "Content-Type": "application/json" } });
+      }
+
+      if (path === "/api/tenant/citas" && request.method === "POST") {
+        const { tenant, error, status } = await resolveTenantForAdminPanel(env2, url);
+        if (error) {
+          return new Response(JSON.stringify({ success: false, error }), {
+            status, headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
+          });
+        }
+        const tid = tenant.id;
+        const body = await request.json();
+        if (!body.nombre || !body.telefono || !body.servicio || !body.fecha || !body.hora) {
+          return new Response(JSON.stringify({ success: false, error: "Faltan campos: nombre, telefono, servicio, fecha, hora" }), {
+            status: 400, headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
+          });
+        }
+        const result = await env2.DB.prepare(
+          "INSERT INTO sgc_cit_Citas (patente, marca, modelo, nombre_cliente, telefono, email, servicio, fecha_cita, hora_cita, duracion_minutos, observaciones, canal, tipo_atencion, tenant_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        ).bind(
+          body.patente || "", body.marca || "", body.modelo || "",
+          body.nombre, body.telefono, body.email || "",
+          body.servicio, body.fecha, body.hora,
+          body.duracion_minutos || 60, body.observaciones || "",
+          body.canal || "admin", body.tipo_atencion || "taller", tid
+        ).run();
+        return new Response(JSON.stringify({ success: true, id: result.meta?.last_row_id, mensaje: "Cita creada" }), {
+          headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
+        });
+      }
+
+      const tenantCitaMatch = path.match(/^\/api\/tenant\/citas\/(\d+)\/(aprobar|rechazar)$/);
+      if (tenantCitaMatch && request.method === "POST") {
+        const citaId = parseInt(tenantCitaMatch[1]);
+        const accion = tenantCitaMatch[2];
+        const { tenant, error, status } = await resolveTenantForAdminPanel(env2, url);
+        if (error) {
+          return new Response(JSON.stringify({ success: false, error }), {
+            status, headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
+          });
+        }
+        const tid = tenant.id;
+        // Verificar que la cita pertenece al tenant
+        const cita = await env2.DB.prepare("SELECT * FROM sgc_cit_Citas WHERE id = ? AND tenant_id = ?").bind(citaId, tid).first();
+        if (!cita) {
+          return new Response(JSON.stringify({ success: false, error: "Cita no encontrada en este tenant" }), {
+            status: 404, headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
+          });
+        }
+        if (accion === "aprobar") {
+          await env2.DB.prepare(
+            "UPDATE sgc_cit_Citas SET estado_aprobacion = 'aprobada', estado = 'confirmada', updated_at = datetime('now') WHERE id = ? AND tenant_id = ?"
+          ).bind(citaId, tid).run();
+          // Notificar al cliente por WhatsApp
+          if (cita.telefono) {
+            await enviarWhatsAppEvolution(env2, cita.telefono,
+              `\u2705 *Su cita ha sido APROBADA*\n\n\u{1F527} Servicio: ${cita.servicio}\n\u{1F4C5} Fecha: ${cita.fecha_cita}\n\u23f0 Hora: ${cita.hora_cita}\n\nLo esperamos. *${tenant.business_name}*`);
+          }
+          return new Response(JSON.stringify({ success: true, mensaje: "Cita aprobada y cliente notificado" }), {
+            headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
+          });
+        } else {
+          const body = await request.json().catch(() => ({}));
+          const motivo = body?.motivo || "No especificado";
+          await env2.DB.prepare(
+            "UPDATE sgc_cit_Citas SET estado_aprobacion = 'rechazada', estado = 'cancelada', motivo_rechazo = ?, updated_at = datetime('now') WHERE id = ? AND tenant_id = ?"
+          ).bind(motivo, citaId, tid).run();
+          if (cita.telefono) {
+            await enviarWhatsAppEvolution(env2, cita.telefono,
+              `\u274c *Su cita ha sido RECHAZADA*\n\n\u{1F527} Servicio: ${cita.servicio}\n\u{1F4C5} Fecha: ${cita.fecha_cita}\n\nMotivo: ${motivo}\nPara reagendar, cont\u00e1ctanos directamente.`);
+          }
+          return new Response(JSON.stringify({ success: true, mensaje: "Cita rechazada y cliente notificado" }), {
+            headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
+          });
+        }
+      }
+
+      if (path === "/api/tenant/servicios" && request.method === "GET") {
+        const { tenant, error, status } = await resolveTenantForAdminPanel(env2, url);
+        if (error) {
+          return new Response(JSON.stringify({ success: false, error }), {
+            status, headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
+          });
+        }
+        const tid = tenant.id;
+        const result = await env2.DB.prepare(
+          "SELECT id, nombre, descripcion, categoria, precio, duracion_minutos, activo, orden, origen, requiere_vehiculo, es_domicilio FROM sgc_cit_servicios_unificados WHERE tenant_id = ? ORDER BY orden ASC, id ASC"
+        ).bind(tid).all();
+        return new Response(JSON.stringify({ success: true, servicios: result.results, total: result.results.length }), {
+          headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
+        });
+      }
+
+      if (path === "/api/tenant/servicios" && request.method === "POST") {
+        const { tenant, error, status } = await resolveTenantForAdminPanel(env2, url);
+        if (error) {
+          return new Response(JSON.stringify({ success: false, error }), {
+            status, headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
+          });
+        }
+        const tid = tenant.id;
+        const body = await request.json();
+        if (!body.nombre || !body.nombre.trim()) {
+          return new Response(JSON.stringify({ success: false, error: "Nombre del servicio requerido" }), {
+            status: 400, headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
+          });
+        }
+        const maxOrd = await env2.DB.prepare("SELECT MAX(orden) as m FROM sgc_cit_servicios_unificados WHERE tenant_id = ?").bind(tid).first();
+        const nextOrd = (maxOrd?.m || 0) + 1;
+        const result = await env2.DB.prepare(
+          "INSERT INTO sgc_cit_servicios_unificados (nombre, descripcion, categoria, precio, duracion_minutos, activo, origen, orden, requiere_vehiculo, es_domicilio, tenant_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        ).bind(
+          body.nombre.trim(),
+          body.descripcion || "",
+          body.categoria || "General",
+          body.precio || 0,
+          body.duracion_minutos || 60,
+          body.activo !== void 0 ? body.activo : 1,
+          body.origen || "manual",
+          body.orden || nextOrd,
+          body.requiere_vehiculo || 0,
+          body.es_domicilio || 0,
+          tid
+        ).run();
+        return new Response(JSON.stringify({ success: true, id: result.meta?.last_row_id, mensaje: "Servicio creado" }), {
+          headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
+        });
+      }
+
+      const tenantServicioMatch = path.match(/^\/api\/tenant\/servicios\/(\d+)$/);
+      if (tenantServicioMatch && request.method === "PUT") {
+        const sid = parseInt(tenantServicioMatch[1]);
+        const { tenant, error, status } = await resolveTenantForAdminPanel(env2, url);
+        if (error) {
+          return new Response(JSON.stringify({ success: false, error }), {
+            status, headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
+          });
+        }
+        const tid = tenant.id;
+        const existing = await env2.DB.prepare("SELECT id FROM sgc_cit_servicios_unificados WHERE id = ? AND tenant_id = ?").bind(sid, tid).first();
+        if (!existing) {
+          return new Response(JSON.stringify({ success: false, error: "Servicio no encontrado en este tenant" }), {
+            status: 404, headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
+          });
+        }
+        const body = await request.json();
+        const sets = [];
+        const vals = [];
+        if (body.nombre !== void 0) { sets.push("nombre = ?"); vals.push(body.nombre.trim()); }
+        if (body.descripcion !== void 0) { sets.push("descripcion = ?"); vals.push(body.descripcion); }
+        if (body.categoria !== void 0) { sets.push("categoria = ?"); vals.push(body.categoria); }
+        if (body.precio !== void 0) { sets.push("precio = ?"); vals.push(body.precio); }
+        if (body.duracion_minutos !== void 0) { sets.push("duracion_minutos = ?"); vals.push(body.duracion_minutos); }
+        if (body.activo !== void 0) { sets.push("activo = ?"); vals.push(body.activo); }
+        if (body.orden !== void 0) { sets.push("orden = ?"); vals.push(body.orden); }
+        if (body.requiere_vehiculo !== void 0) { sets.push("requiere_vehiculo = ?"); vals.push(body.requiere_vehiculo); }
+        if (body.es_domicilio !== void 0) { sets.push("es_domicilio = ?"); vals.push(body.es_domicilio); }
+        if (sets.length > 0) {
+          sets.push("updated_at = datetime('now')");
+          vals.push(sid);
+          vals.push(tid);
+          await env2.DB.prepare(`UPDATE sgc_cit_servicios_unificados SET ${sets.join(", ")} WHERE id = ? AND tenant_id = ?`).bind(...vals).run();
+        }
+        return new Response(JSON.stringify({ success: true, mensaje: "Servicio actualizado" }), {
+          headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
+        });
+      }
+
+      if (tenantServicioMatch && request.method === "DELETE") {
+        const sid = parseInt(tenantServicioMatch[1]);
+        const { tenant, error, status } = await resolveTenantForAdminPanel(env2, url);
+        if (error) {
+          return new Response(JSON.stringify({ success: false, error }), {
+            status, headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
+          });
+        }
+        const tid = tenant.id;
+        // Soft-delete: marcar como inactivo (preserva integridad de citas historicas)
+        const result = await env2.DB.prepare(
+          "UPDATE sgc_cit_servicios_unificados SET activo = 0, updated_at = datetime('now') WHERE id = ? AND tenant_id = ?"
+        ).bind(sid, tid).run();
+        const changed = result.meta?.changes || 0;
+        if (changed === 0) {
+          return new Response(JSON.stringify({ success: false, error: "Servicio no encontrado en este tenant" }), {
+            status: 404, headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
+          });
+        }
+        return new Response(JSON.stringify({ success: true, mensaje: "Servicio desactivado" }), {
           headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
         });
       }
@@ -2276,6 +2579,55 @@ async function enviarWhatsAppEvolution(env2, phone, text) {
 }
 __name(enviarWhatsAppEvolution, "enviarWhatsAppEvolution");
 
+// ============================================================
+// ENVIO DE IMAGEN POR WHATSAPP (Evolution API v2: sendMedia)
+// ============================================================
+async function enviarImagenWhatsAppEvolution(env2, instanceName, phone, base64, caption) {
+  try {
+    const inst = instanceName || env2.EVOLUTION_INSTANCE_NAME || "make peueba";
+    const apiKey = env2.EVOLUTION_API_KEY;
+    const baseUrl = env2.EVOLUTION_API_URL;
+    if (!apiKey || !baseUrl) {
+      console.error("enviarImagenWhatsAppEvolution: Evolution API no configurada");
+      return { success: false, error: "Evolution API no configurada" };
+    }
+    const cleanPhone = phone.replace(/[^0-9]/g, "");
+    // Asegurar que base64 no tenga el prefijo data:image/...;base64,
+    const cleanBase64 = (base64 || "").replace(/^data:image\/[a-z]+;base64,/, "");
+    if (!cleanBase64) {
+      return { success: false, error: "base64 vac\u00edo" };
+    }
+    const url2 = `${baseUrl}/message/sendMedia/${encodeURIComponent(inst)}`;
+    const response = await fetch(url2, {
+      method: "POST",
+      headers: {
+        "apikey": apiKey,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        number: cleanPhone,
+        media: {
+          mediatype: "image",
+          caption: caption || "",
+          media: cleanBase64
+        }
+      })
+    });
+    const data = await response.json().catch(() => ({}));
+    if (response.ok) {
+      console.log(`Imagen WhatsApp enviada a ${cleanPhone} (instance=${inst})`);
+      return { success: true };
+    } else {
+      console.error("Evolution API sendMedia error:", response.status, JSON.stringify(data));
+      return { success: false, error: data.message || data.error || `HTTP ${response.status}` };
+    }
+  } catch (error) {
+    console.error("Error enviarImagenWhatsAppEvolution:", error);
+    return { success: false, error: error.message };
+  }
+}
+__name(enviarImagenWhatsAppEvolution, "enviarImagenWhatsAppEvolution");
+
 function formatForWhatsApp(text) {
   // Convertir **bold** markdown a *bold* de WhatsApp
   text = text.replace(/\*\*(.+?)\*\*/g, "*$1*");
@@ -2592,14 +2944,26 @@ async function handleAdminCommand(env2, body) {
           
           if (createRes.ok) {
             instanceCreated = true;
-            // Esperar 2s y obtener QR
-            await new Promise(r => setTimeout(r, 2000));
-            
-            const qrRes = await fetch(`${env2.EVOLUTION_API_URL}/instance/connect/${instanceName}`, {
-              headers: { "apikey": env2.EVOLUTION_API_KEY }
-            });
-            const qrData = await qrRes.json();
-            qrBase64 = qrData.base64 || qrData.qr || null;
+            // Reintentar hasta 3 veces (Evolution a veces tarda en generar el QR)
+            for (let attempt = 1; attempt <= 3; attempt++) {
+              await new Promise(r => setTimeout(r, 5000));
+              try {
+                const qrRes = await fetch(`${env2.EVOLUTION_API_URL}/instance/connect/${instanceName}`, {
+                  headers: { "apikey": env2.EVOLUTION_API_KEY }
+                });
+                const qrData = await qrRes.json().catch(() => ({}));
+                const rawQr = qrData.base64 || qrData.qr || null;
+                if (rawQr) {
+                  // Quitar prefijo data:image/png;base64, si existe
+                  qrBase64 = rawQr.replace(/^data:image\/[a-z]+;base64,/, "");
+                  console.log(`QR obtenido en intento ${attempt}/3`);
+                  break;
+                }
+                console.log(`Intento ${attempt}/3: QR no disponible a\u00fan`);
+              } catch (qrErr) {
+                console.error(`Intento ${attempt}/3 QR fall\u00f3:`, qrErr.message);
+              }
+            }
           }
           
           await env2.DB.prepare("UPDATE tenants SET evolution_instance = ? WHERE slug = ?").bind(instanceName, slug).run();
@@ -2618,28 +2982,46 @@ async function handleAdminCommand(env2, body) {
         reply += `Servicios default cargados: ✅\n\n`;
         
         if (qrBase64) {
-          reply += `📱 *QR code enviado al cliente por WhatsApp*`;
+          reply += `\u{1F4F1} *QR code enviado al cliente por WhatsApp (como imagen)*`;
           // Enviar QR al cliente
           if (tenant.whatsapp_number) {
             const cleanPhone = tenant.whatsapp_number.replace(/[^0-9]/g, "");
+            // 1. Enviar mensaje de texto previo
             await enviarWhatsAppEvolution(env2, cleanPhone, 
-              `🎉 ¡Tu bot está listo, ${tenant.business_name}!\n\n` +
-              `Te envié el código QR en un mensaje separado. Ábrela y:\n` +
+              `\u{1F389} \u00a1Tu bot est\u00e1 listo, ${tenant.business_name}!\n\n` +
+              `Te env\u00edo el c\u00f3digo QR como imagen en el pr\u00f3ximo mensaje. Para activarlo:\n` +
               `1. Abre WhatsApp en tu celular\n` +
-              `2. Ve a Configuración → Dispositivos vinculados → Vincular dispositivo\n` +
-              `3. Escanea el QR\n\n` +
-              `Una vez conectado, tu bot estará activo. Prueba escribiéndome "Hola".`
+              `2. Ve a Configuraci\u00f3n \u2192 Dispositivos vinculados \u2192 Vincular dispositivo\n` +
+              `3. Escanea el QR que te envi\u00e9\n\n` +
+              `Una vez conectado, tu bot estar\u00e1 activo. Prueba escribi\u00e9ndome "Hola".`
             );
-            // Enviar QR como imagen (Evolution API: endpoint /message/sendMedia)
-            // Por simplicidad, lo enviamos como link para que lo abra
-            await enviarWhatsAppEvolution(env2, cleanPhone,
-              `📱 Tu QR code está disponible aquí:\n${env2.EVOLUTION_API_URL}/instance/connect/${instanceName}\n\n` +
-              `O entra a: https://sgc-saas.pages.dev/status?slug=${slug}\n` +
-              `Y escanea el QR desde tu pantalla.`
+            // 2. Enviar QR como imagen (Evolution API: POST /message/sendMedia/{instance})
+            // Usamos la instancia admin (env2.EVOLUTION_INSTANCE_NAME) porque la del
+            // cliente reci\u00e9n se cre\u00f3 y todav\u00eda no est\u00e1 conectada (no puede enviar msgs).
+            const mediaRes = await enviarImagenWhatsAppEvolution(
+              env2,
+              env2.EVOLUTION_INSTANCE_NAME,
+              cleanPhone,
+              qrBase64,
+              `\u{1F4F1} Escanea este QR para activar tu bot de ${tenant.business_name}\n\n` +
+              `1. Abre WhatsApp en tu celular\n` +
+              `2. Configuraci\u00f3n \u2192 Dispositivos vinculados \u2192 Vincular dispositivo\n` +
+              `3. Apunta la c\u00e1mara al QR\n\n` +
+              `Una vez escaneado, tu bot estar\u00e1 activo \u2705`
             );
+            // 3. Si falla el env\u00edo de imagen, fallback a link
+            if (!mediaRes.success) {
+              console.error("Env\u00edo de imagen QR fall\u00f3, fallback a link:", mediaRes.error);
+              await enviarWhatsAppEvolution(env2, cleanPhone,
+                `\u26a0\ufe0f No se pudo enviar el QR como imagen.\n` +
+                `\u{1F4F1} Tu QR est\u00e1 disponible aqu\u00ed:\n${env2.EVOLUTION_API_URL}/instance/connect/${instanceName}\n\n` +
+                `O entra a: https://sgc-saas.pages.dev/status?slug=${slug}`
+              );
+              reply += `\n\u26a0\ufe0f (env\u00edo de imagen fall\u00f3, se envi\u00f3 link como respaldo)`;
+            }
           }
         } else {
-          reply += `⚠️ No se pudo generar QR automáticamente.\n`;
+          reply += `\u26a0\ufe0f No se pudo generar QR autom\u00e1ticamente.\n`;
           reply += `El cliente puede ver su QR en: https://sgc-saas.pages.dev/status?slug=${slug}`;
         }
         
