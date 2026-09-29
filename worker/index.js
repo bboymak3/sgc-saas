@@ -1072,21 +1072,21 @@ async function enviarWhatsApp(env2, telefono, mensaje) {
   }
 }
 __name(enviarWhatsApp, "enviarWhatsApp");
-async function getDisponibilidad(env2, fecha) {
+async function getDisponibilidad(env2, fecha, tenantId) {
   const dateObj = /* @__PURE__ */ new Date(fecha + "T12:00:00");
   const dias = ["domingo", "lunes", "martes", "miercoles", "jueves", "viernes", "sabado"];
   const diaSemana = dias[dateObj.getDay()];
-  const horario = await env2.DB.prepare("SELECT * FROM sgc_cit_horarios WHERE dia_semana = ?").bind(diaSemana).first();
+  const horario = await env2.DB.prepare("SELECT * FROM sgc_cit_horarios WHERE dia_semana = ? AND tenant_id = ?").bind(diaSemana, tenantId).first();
   if (!horario || !horario.activo) {
     return { slots: [], cerrado: true };
   }
-  const bloqueo = await env2.DB.prepare("SELECT * FROM sgc_cit_bloqueos WHERE fecha = ?").bind(fecha).first();
+  const bloqueo = await env2.DB.prepare("SELECT * FROM sgc_cit_bloqueos WHERE fecha = ? AND tenant_id = ?").bind(fecha, tenantId).first();
   if (bloqueo) {
     return { slots: [], cerrado: true };
   }
-  const configMax = await env2.DB.prepare("SELECT valor FROM sgc_cit_config WHERE clave = 'max_citas_por_dia'").first();
+  const configMax = await env2.DB.prepare("SELECT valor FROM sgc_cit_config WHERE clave = 'max_citas_por_dia' AND tenant_id = ?").bind(tenantId).first();
   const maxCitas = configMax ? parseInt(configMax.valor) : 20;
-  const citasExistentes = await env2.DB.prepare("SELECT hora_cita FROM sgc_cit_Citas WHERE fecha_cita = ? AND estado NOT IN ('cancelada')").bind(fecha).all();
+  const citasExistentes = await env2.DB.prepare("SELECT hora_cita FROM sgc_cit_Citas WHERE fecha_cita = ? AND estado NOT IN ('cancelada') AND tenant_id = ?").bind(fecha, tenantId).all();
   const horasOcupadas = new Set(citasExistentes.results.map((c) => c.hora_cita));
   const slots = [];
   const [aperturaH, aperturaM] = horario.hora_apertura.split(":").map(Number);
@@ -1347,7 +1347,10 @@ var index_default = {
             headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
           });
         }
-        const result = await getDisponibilidad(env2, fecha);
+        const slugDisp = url.searchParams.get("t") || url.searchParams.get("tenant") || "sgc";
+        const tenantDisp = await env2.DB.prepare("SELECT id FROM tenants WHERE slug = ? AND status IN ('active', 'pending_approval')").bind(slugDisp).first();
+        const tenantIdDisp = tenantDisp ? tenantDisp.id : 1;
+        const result = await getDisponibilidad(env2, fecha, tenantIdDisp);
         return new Response(JSON.stringify(result), {
           headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
         });
@@ -1390,7 +1393,10 @@ var index_default = {
             headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
           });
         }
-        const disp = await getDisponibilidad(env2, body.fecha);
+        const slugAg = url.searchParams.get("t") || url.searchParams.get("tenant") || "sgc";
+        const tenantAg = await env2.DB.prepare("SELECT id FROM tenants WHERE slug = ? AND status IN ('active', 'pending_approval')").bind(slugAg).first();
+        const tenantIdAg = tenantAg ? tenantAg.id : 1;
+        const disp = await getDisponibilidad(env2, body.fecha, tenantIdAg);
         if (disp.cerrado) {
           return new Response(JSON.stringify({ error: "No hay disponibilidad para esa fecha" }), {
             status: 409,
@@ -2221,7 +2227,7 @@ async function handleWhatsAppWebhook(request, env2) {
       
       if (toolCallsArr.length === 0) {
         // Si aun no llama al tool, parsear manualmente del historial
-        const parsed = parseCitaFromHistory(history, text);
+        const parsed = await parseCitaFromHistory(history, text, env2, tenantId);
         if (parsed) {
           toolCallsArr = [{
             function: {
@@ -2447,8 +2453,8 @@ async function getOrCreateWhatsAppConversation(env2, phone, pushName, tenantId) 
     await env2.DB.prepare(
       "INSERT INTO sgc_cit_WhatsApp_conversations (phone, contact_name, tenant_id) VALUES (?, ?, ?)"
     ).bind(phone, pushName || "", tenantId || 1).run();    conv = await env2.DB.prepare(
-      "SELECT * FROM sgc_cit_WhatsApp_conversations WHERE phone = ?"
-    ).bind(phone).first();
+      "SELECT * FROM sgc_cit_WhatsApp_conversations WHERE phone = ? AND tenant_id = ?"
+    ).bind(phone, tenantId || 1).first();
   } else if (pushName && pushName !== conv.contact_name) {
     // Actualizar nombre si cambió
     await env2.DB.prepare(
@@ -2608,6 +2614,20 @@ __name(formatForWhatsApp, "formatForWhatsApp");
 async function executeWhatsAppTool(env2, toolName, params, conversation) {
   try {
     if (toolName === "agendar_cita") {
+      // Validar formato fecha YYYY-MM-DD
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(params.fecha)) {
+        return { success: false, error: "Formato de fecha inválido. Debe ser YYYY-MM-DD." };
+      }
+      // Validar formato hora HH:MM (24h)
+      if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(params.hora)) {
+        return { success: false, error: "Formato de hora inválido. Debe ser HH:MM (24h)." };
+      }
+      // Validar fecha futura
+      const ahora = new Date();
+      const fechaCita = new Date(params.fecha + "T" + params.hora + ":00");
+      if (isNaN(fechaCita.getTime()) || fechaCita < ahora) {
+        return { success: false, error: "La fecha debe ser futura." };
+      }
       // Validar horario de atencion
       const fechaObj = new Date(params.fecha + "T12:00:00");
       const dia = fechaObj.getDay();
@@ -2624,8 +2644,8 @@ async function executeWhatsAppTool(env2, toolName, params, conversation) {
       
       // Verificar disponibilidad (no doble booking)
       const existing = await env2.DB.prepare(
-        "SELECT id FROM sgc_cit_Citas WHERE fecha_cita = ? AND hora_cita = ? AND estado NOT IN ('cancelada')"
-      ).bind(params.fecha, params.hora).first();
+        "SELECT id FROM sgc_cit_Citas WHERE fecha_cita = ? AND hora_cita = ? AND estado NOT IN ('cancelada') AND tenant_id = ?"
+      ).bind(params.fecha, params.hora, conversation.tenant_id || 1).first();
       if (existing) return { success: false, error: "Ese horario ya esta reservado" };
       
       // INSERT en D1
@@ -2662,8 +2682,8 @@ async function executeWhatsAppTool(env2, toolName, params, conversation) {
     
     if (toolName === "verificar_disponibilidad") {
       const existing = await env2.DB.prepare(
-        "SELECT id, servicio, nombre_cliente FROM sgc_cit_Citas WHERE fecha_cita = ? AND hora_cita = ? AND estado NOT IN ('cancelada')"
-      ).bind(params.fecha, params.hora).first();
+        "SELECT id, servicio, nombre_cliente FROM sgc_cit_Citas WHERE fecha_cita = ? AND hora_cita = ? AND estado NOT IN ('cancelada') AND tenant_id = ?"
+      ).bind(params.fecha, params.hora, conversation.tenant_id || 1).first();
       
       // Verificar horario de atencion
       const fechaObj = new Date(params.fecha + "T12:00:00");
@@ -2729,9 +2749,15 @@ function formatDateSpanish(fechaStr) {
 __name(formatDateSpanish, "formatDateSpanish");
 
 
-function parseCitaFromHistory(history, currentText) {
+async function parseCitaFromHistory(history, currentText, env2, tenantId) {
   try {
     const allText = history.map(h => h.content).join(" ") + " " + currentText;
+    
+    // Cargar servicios reales del tenant desde D1
+    const serviciosResult = await env2.DB.prepare(
+      "SELECT nombre FROM sgc_cit_servicios_unificados WHERE activo = 1 AND tenant_id = ?"
+    ).bind(tenantId).all();
+    const servicios = (serviciosResult.results || []).map(s => s.nombre);
     
     // Buscar fecha
     let fecha = null;
@@ -2786,7 +2812,6 @@ function parseCitaFromHistory(history, currentText) {
     }
     
     // Buscar servicio en la lista
-    const servicios = ["Cambio de Aceite","Revision General","Scanner Diagnostico","Frenos","Revision Electrica","Aire Acondicionado","Revision Tecnica","Servicio a Domicilio","Esc\u00e1ner Profesional","Diagn\u00f3stico Electr\u00f3nico","Otro"];
     let servicio = null;
     for (const s of servicios) {
       const sRegex = new RegExp(s.replace(/\s+/g, "\\s+"), "i");
@@ -2795,16 +2820,16 @@ function parseCitaFromHistory(history, currentText) {
         break;
       }
     }
-    // Fuzzy: "aceite" -> Cambio de Aceite
+    // Fuzzy: buscar coincidencia parcial en servicios reales del tenant
     if (!servicio) {
-      if (/aceite/i.test(allText)) servicio = "Cambio de Aceite";
-      else if (/frenos?/i.test(allText)) servicio = "Frenos";
-      else if (/scanner|esc\u00e1ner|diagn\u00f3stico/i.test(allText)) servicio = "Scanner Diagnostico";
-      else if (/el\u00e9ctrica|electrica/i.test(allText)) servicio = "Revision Electrica";
-      else if (/aire/i.test(allText)) servicio = "Aire Acondicionado";
-      else if (/revisi\u00f3n\s+t\u00e9cnica|revision\s+tecnica/i.test(allText)) servicio = "Revision Tecnica";
-      else if (/domicilio/i.test(allText)) servicio = "Servicio a Domicilio";
-      else if (/revisi\u00f3n|revision/i.test(allText)) servicio = "Revision General";
+      for (const s of servicios) {
+        const sLower = s.toLowerCase();
+        const palabras = sLower.split(/\s+/).filter(p => p.length > 3);
+        if (palabras.some(p => allText.toLowerCase().includes(p))) {
+          servicio = s;
+          break;
+        }
+      }
     }
     
     // Buscar patente (formato chileno: 4 letras + 2 numeros o similar)
