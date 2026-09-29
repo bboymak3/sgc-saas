@@ -14,7 +14,7 @@ function prodLikeDb() {
   db.exec_(`
     INSERT INTO tenants (id, slug, business_name) VALUES (1,'sgc','SGC'),(2,'b','B'),(3,'c','C');
     INSERT INTO sgc_cit_WhatsApp_conversations (id, phone, tenant_id, client_context) VALUES (1,'569111',1,'{"patente":"AB1234"}'),(2,'569222',2,NULL);
-    INSERT INTO sgc_cit_WhatsApp_messages (conversation_id, direction, content, tenant_id) VALUES (1,'inbound','hola',1),(1,'outbound','hola!',1),(2,'inbound','x',2);
+    INSERT INTO sgc_cit_WhatsApp_messages (conversation_id, direction, content, tenant_id) VALUES (1,'inbound','hola',1),(1,'outbound','hola!',1),(2,'inbound','x',1);
     INSERT INTO sgc_cit_horarios (dia_semana, tenant_id) VALUES ('lunes',3),('martes',3),('lunes',3),('martes',3),('lunes',1);
     INSERT INTO sgc_cit_config (clave, valor, tenant_id) VALUES ('max_citas_por_dia','20',1),('anticipacion_dias','30',1);
     INSERT INTO sgc_cit_bloqueos (fecha, motivo, tenant_id) VALUES ('2026-12-25','Navidad',1);
@@ -31,6 +31,7 @@ test("migraciones: se aplican sobre un esquema como el de producción sin perder
   assert.deepEqual(convs.map((c) => [c.id, c.phone, c.tenant_id]), [[1, "569111", 1], [2, "569222", 2]]);
   assert.equal(convs[0].client_context, '{"patente":"AB1234"}');
   assert.equal(db.rows("SELECT * FROM sgc_cit_WhatsApp_messages").length, 3, "mensajes conservados");
+  assert.equal(db.row("SELECT tenant_id FROM sgc_cit_WhatsApp_messages WHERE conversation_id = 2").tenant_id, 2, "el mensaje toma el tenant de su conversación");
   assert.equal(db.rows("PRAGMA foreign_key_check").length, 0, "sin FKs rotas");
 
   // 0001: mismo teléfono en otro tenant permitido, duplicado en el mismo tenant no

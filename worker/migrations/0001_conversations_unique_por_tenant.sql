@@ -43,7 +43,7 @@ FROM sgc_cit_WhatsApp_conversations;
 
 INSERT INTO sgc_cit_WhatsApp_messages_new
   (id, conversation_id, direction, content, tool_used, tool_input, tool_result, created_at, tenant_id)
-SELECT m.id, m.conversation_id, m.direction, m.content, m.tool_used, m.tool_input, m.tool_result, m.created_at, COALESCE(m.tenant_id, c.tenant_id, 1)
+SELECT m.id, m.conversation_id, m.direction, m.content, m.tool_used, m.tool_input, m.tool_result, m.created_at, COALESCE(c.tenant_id, m.tenant_id, 1)
 FROM sgc_cit_WhatsApp_messages m
 JOIN sgc_cit_WhatsApp_conversations c ON c.id = m.conversation_id;
 
