@@ -1567,12 +1567,19 @@ var index_default = {
             headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
           });
         }
-        const serviciosResult = await env2.DB.prepare("SELECT nombre, descripcion, duracion_minutos, precio, categoria FROM sgc_cit_servicios_unificados WHERE activo = 1 ORDER BY orden ASC, id ASC").all();
+        // Detectar tenant del query param ?t=<slug>
+        const chatSlug = url.searchParams.get("t") || "sgc";
+        const chatTenant = await env2.DB.prepare("SELECT * FROM tenants WHERE slug = ?").bind(chatSlug).first();
+        const chatTenantId = chatTenant?.id || 1;
+        const chatTenantName = chatTenant?.business_name || env2.BUSINESS_NAME;
+        const chatTenantPhone = chatTenant?.business_phone || env2.BUSINESS_PHONE;
+        
+        const serviciosResult = await env2.DB.prepare("SELECT nombre, descripcion, duracion_minutos, precio, categoria FROM sgc_cit_servicios_unificados WHERE activo = 1 AND tenant_id = ? ORDER BY orden ASC, id ASC").bind(chatTenantId).all();
         const serviciosText = serviciosResult.results.map((s, i) => {
           const precioStr = s.precio > 0 ? `$${s.precio.toLocaleString("es-CL")} (ref.)` : "Consultar precio";
           return `${i + 1}. ${s.nombre} \u2014 ${s.descripcion || "Servicio profesional"} \u2014 ${precioStr} (${s.categoria || "General"}, ~${s.duracion_minutos} min)`;
         }).join("\n");
-        const systemPrompt = getSystemPrompt(env2.BUSINESS_NAME, serviciosText);
+        const systemPrompt = getSystemPrompt(chatTenantName, serviciosText);
         const chatMessages = [
           { role: "system", content: systemPrompt }
         ];
@@ -1733,6 +1740,45 @@ Lamentamos las molestias. Para m\xE1s informaci\xF3n o reagendar, contacte direc
         });
       }
 
+      // ============================================================
+      // PUBLIC TENANT INFO (para chat web embebido)
+      // ============================================================
+      if (path === "/api/tenant/public" && request.method === "GET") {
+        const slug = url.searchParams.get("t") || url.searchParams.get("slug");
+        if (!slug) {
+          return new Response(JSON.stringify({ success: false, error: "slug requerido" }), {
+            status: 400,
+            headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" }
+          });
+        }
+        const tenant = await env2.DB.prepare(
+          "SELECT slug, business_name, business_phone, rubro, status FROM tenants WHERE slug = ?"
+        ).bind(slug).first();
+        if (!tenant) {
+          return new Response(JSON.stringify({ success: false, error: "Tenant no encontrado" }), {
+            status: 404,
+            headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" }
+          });
+        }
+        if (tenant.status !== "active" && tenant.status !== "approved") {
+          return new Response(JSON.stringify({ success: false, error: "Tenant inactivo", status: tenant.status }), {
+            status: 403,
+            headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" }
+          });
+        }
+        // Servicios públicos del tenant
+        const servicios = await env2.DB.prepare(
+          "SELECT nombre, descripcion, precio, categoria, duracion_minutos FROM sgc_cit_servicios_unificados WHERE activo = 1 AND tenant_id = (SELECT id FROM tenants WHERE slug = ?) ORDER BY orden ASC"
+        ).bind(slug).all();
+        return new Response(JSON.stringify({
+          success: true,
+          tenant: { slug: tenant.slug, business_name: tenant.business_name, business_phone: tenant.business_phone, rubro: tenant.rubro },
+          servicios: servicios.results || []
+        }), {
+          headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" }
+        });
+      }
+      
       // ============================================================
       // ONBOARDING (SaaS)
       // ============================================================
@@ -2927,7 +2973,7 @@ async function handleAdminCommand(env2, body) {
         let instanceCreated = false;
         
         try {
-          // Crear instancia
+          // Crear instancia (formato correcto Evolution API v2)
           const createRes = await fetch(`${env2.EVOLUTION_API_URL}/instance/create`, {
             method: "POST",
             headers: {
@@ -2936,9 +2982,12 @@ async function handleAdminCommand(env2, body) {
             },
             body: JSON.stringify({
               instanceName: instanceName,
-              webhook: `https://sgc-saas.activo.workers.dev/api/whatsapp/webhook?t=${slug}`,
-              webhook_by_events: false,
-              events: ["MESSAGES_UPSERT", "CONNECTION_UPDATE"]
+              integration: "WHATSAPP-BAILEYS",
+              webhook: {
+                url: `https://sgc-saas.activo.workers.dev/api/whatsapp/webhook?t=${slug}`,
+                webhook_by_events: false,
+                events: ["messages.upsert", "connection.update"]
+              }
             })
           });
           
