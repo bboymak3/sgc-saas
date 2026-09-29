@@ -862,7 +862,32 @@ function superAdminJson(data, status) {
     headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
   });
 }
-function getSystemPrompt(businessName, servicios) {
+async function getSystemPrompt(env2, tenantId, businessName, servicios) {
+  // Cargar prompt personalizado del tenant si existe
+  if (env2 && env2.DB && tenantId) {
+    try {
+      const customPrompt = await env2.DB.prepare(
+        "SELECT valor FROM sgc_cit_config WHERE tenant_id = ? AND clave = 'custom_prompt'"
+      ).bind(tenantId).first();
+      if (customPrompt?.valor) {
+        // Sustituir variables {business_name}, {servicios}, {bot_name}
+        let botName = "Sofi";
+        try {
+          const botNameCfg = await env2.DB.prepare(
+            "SELECT valor FROM sgc_cit_config WHERE tenant_id = ? AND clave = 'bot_name'"
+          ).bind(tenantId).first();
+          if (botNameCfg?.valor) botName = botNameCfg.valor;
+        } catch (e) {}
+        let custom = customPrompt.valor
+          .replace(/\{business_name\}/g, businessName || "")
+          .replace(/\{bot_name\}/g, botName)
+          .replace(/\{servicios\}/g, servicios || "");
+        return custom;
+      }
+    } catch (e) {
+      console.error("Error cargando custom_prompt en getSystemPrompt:", e);
+    }
+  }
   const now = /* @__PURE__ */ new Date();
   const tz = "America/Santiago";
   const fmtDate = new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" });
@@ -1563,7 +1588,7 @@ var index_default = {
           const precioStr = s.precio > 0 ? `$${s.precio.toLocaleString("es-CL")} (ref.)` : "Consultar precio";
           return `${i + 1}. ${s.nombre} \u2014 ${s.descripcion || "Servicio profesional"} \u2014 ${precioStr} (${s.categoria || "General"}, ~${s.duracion_minutos} min)`;
         }).join("\n");
-        const systemPrompt = getSystemPrompt(chatTenantName, serviciosText);
+        const systemPrompt = await getSystemPrompt(env2, chatTenantId, chatTenantName, serviciosText);
         const chatMessages = [
           { role: "system", content: systemPrompt }
         ];
@@ -2302,18 +2327,72 @@ Lamentamos las molestias. Para m\xE1s informaci\xF3n o reagendar, contacte direc
         const slug = decodeURIComponent(saQrMatch[1]);
         const tenant = await env2.DB.prepare("SELECT * FROM tenants WHERE slug = ?").bind(slug).first();
         if (!tenant) return superAdminJson({ success: false, error: "Tenant no encontrado" }, 404);
-        if (!tenant.evolution_instance) return superAdminJson({ success: false, error: "QR no disponible" }, 400);
+        if (!tenant.evolution_instance) return superAdminJson({ success: false, error: "Este negocio no tiene instancia de WhatsApp configurada" }, 400);
         try {
+          // Primero verificar el estado de la instancia
+          const stateRes = await fetch(`${env2.EVOLUTION_API_URL}/instance/fetchInstances?instanceName=${encodeURIComponent(tenant.evolution_instance)}`, {
+            headers: { "apikey": env2.EVOLUTION_API_KEY }
+          });
+          const stateData = await stateRes.json().catch(() => ({}));
+          const instances = Array.isArray(stateData) ? stateData : (stateData.result || []);
+          const inst = instances[0] || {};
+          const connStatus = inst.connectionStatus || inst.state || "unknown";
+
+          if (connStatus === "open") {
+            return superAdminJson({
+              success: true,
+              connected: true,
+              state: "open",
+              message: "WhatsApp ya está conectado y funcionando. No necesita escanear QR.",
+              instance: tenant.evolution_instance,
+              owner: inst.ownerJid || null,
+              profileName: inst.profileName || null
+            });
+          }
+
+          // No está conectado, obtener QR
           const qrRes = await fetch(`${env2.EVOLUTION_API_URL}/instance/connect/${tenant.evolution_instance}`, {
             headers: { "apikey": env2.EVOLUTION_API_KEY }
           });
           const qrData = await qrRes.json().catch(() => ({}));
-          const rawQr = qrData.base64 || qrData.qr || qrData?.data?.base64 || null;
-          if (!rawQr) return superAdminJson({ success: false, error: "QR no disponible" });
-          const base64 = rawQr.startsWith("data:image") ? rawQr : `data:image/png;base64,${rawQr.replace(/^data:image\/[a-z]+;base64,/, "")}`;
-          return superAdminJson({ success: true, qr: base64, instance: tenant.evolution_instance });
+
+          // Evolution API v2 puede devolver el QR en varios campos
+          let rawQr = qrData.base64 || qrData.qr || qrData.qrcode || (qrData.data && qrData.data.base64) || (qrData.instance && qrData.instance.qrcode) || null;
+
+          // Si la instancia está en estado "close" o "connecting", Evolution a veces necesita un momento
+          if (!rawQr) {
+            await new Promise((r) => setTimeout(r, 3000));
+            const qrRes2 = await fetch(`${env2.EVOLUTION_API_URL}/instance/connect/${tenant.evolution_instance}`, {
+              headers: { "apikey": env2.EVOLUTION_API_KEY }
+            });
+            const qrData2 = await qrRes2.json().catch(() => ({}));
+            rawQr = qrData2.base64 || qrData2.qr || qrData2.qrcode || (qrData2.data && qrData2.data.base64) || null;
+          }
+
+          if (!rawQr) {
+            return superAdminJson({
+              success: false,
+              error: "No se pudo generar el QR. La instancia puede estar en proceso de conexión. Intenta de nuevo en 30 segundos.",
+              state: connStatus,
+              instance: tenant.evolution_instance
+            });
+          }
+
+          // Normalizar el base64 a data URL
+          let base64 = rawQr;
+          if (!base64.startsWith("data:image")) {
+            base64 = `data:image/png;base64,${base64.replace(/^data:image\/[a-z]+;base64,/, "")}`;
+          }
+
+          return superAdminJson({
+            success: true,
+            qr: base64,
+            connected: false,
+            state: connStatus,
+            instance: tenant.evolution_instance
+          });
         } catch (e) {
-          return superAdminJson({ success: false, error: "QR no disponible", details: e.message }, 500);
+          return superAdminJson({ success: false, error: "Error al obtener QR: " + e.message }, 500);
         }
       }
 
@@ -2454,6 +2533,59 @@ Lamentamos las molestias. Para m\xE1s informaci\xF3n o reagendar, contacte direc
         }
         return superAdminJson({ success: true });
       }
+
+      // === EDITOR DE PROMPTS POR TENANT ===
+      const saPromptMatch = path.match(/^\/api\/superadmin\/tenants\/([^/]+)\/prompt$/);
+      if (saPromptMatch && request.method === "GET") {
+        if (!superAdminCheckAuth(request, url)) return superAdminUnauthorized();
+        const slug = decodeURIComponent(saPromptMatch[1]);
+        const tenant = await env2.DB.prepare("SELECT * FROM tenants WHERE slug = ?").bind(slug).first();
+        if (!tenant) return superAdminJson({ success: false, error: "Tenant no encontrado" }, 404);
+
+        // Buscar prompt personalizado en sgc_cit_config
+        const promptConfig = await env2.DB.prepare(
+          "SELECT valor FROM sgc_cit_config WHERE tenant_id = ? AND clave = 'custom_prompt'"
+        ).bind(tenant.id).first();
+
+        // Buscar nombre del bot personalizado
+        const botNameConfig = await env2.DB.prepare(
+          "SELECT valor FROM sgc_cit_config WHERE tenant_id = ? AND clave = 'bot_name'"
+        ).bind(tenant.id).first();
+
+        return superAdminJson({
+          success: true,
+          custom_prompt: promptConfig?.valor || null,
+          bot_name: botNameConfig?.valor || "Sofi",
+          business_name: tenant.business_name,
+          rubro: tenant.rubro
+        });
+      }
+      if (saPromptMatch && request.method === "PUT") {
+        if (!superAdminCheckAuth(request, url)) return superAdminUnauthorized();
+        const slug = decodeURIComponent(saPromptMatch[1]);
+        const tenant = await env2.DB.prepare("SELECT * FROM tenants WHERE slug = ?").bind(slug).first();
+        if (!tenant) return superAdminJson({ success: false, error: "Tenant no encontrado" }, 404);
+
+        const body = await request.json().catch(() => ({}));
+        const { custom_prompt, bot_name } = body;
+
+        // Upsert prompt personalizado
+        if (custom_prompt !== undefined) {
+          await env2.DB.prepare(
+            "INSERT INTO sgc_cit_config (tenant_id, clave, valor) VALUES (?, 'custom_prompt', ?) ON CONFLICT(tenant_id, clave) DO UPDATE SET valor = ?"
+          ).bind(tenant.id, custom_prompt || "", custom_prompt || "").run();
+        }
+
+        // Upsert bot_name
+        if (bot_name !== undefined) {
+          await env2.DB.prepare(
+            "INSERT INTO sgc_cit_config (tenant_id, clave, valor) VALUES (?, 'bot_name', ?) ON CONFLICT(tenant_id, clave) DO UPDATE SET valor = ?"
+          ).bind(tenant.id, bot_name || "Sofi", bot_name || "Sofi").run();
+        }
+
+        return superAdminJson({ success: true, message: "Prompt actualizado correctamente" });
+      }
+
       // === FIN SUPER ADMIN ENDPOINTS ===
 
       return env2.ASSETS.fetch(request);
@@ -2510,6 +2642,26 @@ async function handleWhatsAppWebhook(request, env2) {
     const tenantName = tenant?.business_name || env2.BUSINESS_NAME;
     const tenantPhone = tenant?.business_phone || env2.BUSINESS_PHONE;
     
+    // ===== CHECK DE PAUSA =====
+    // 1. ¿Está el bot globalmente pausado para este tenant?
+    const botPaused = await env2.DB.prepare(
+      "SELECT valor FROM sgc_cit_config WHERE tenant_id = ? AND clave = 'bot_paused'"
+    ).bind(tenantId).first();
+    const isBotPaused = botPaused && botPaused.valor === 'true';
+    if (isBotPaused) {
+      console.log(`Bot pausado para tenant ${tenantId}, ignorando mensaje de ${phone}`);
+      return new Response("OK", { status: 200 });
+    }
+    
+    // 2. ¿Está este número específicamente pausado?
+    const pausedConv = await env2.DB.prepare(
+      "SELECT status FROM sgc_cit_WhatsApp_conversations WHERE phone = ? AND tenant_id = ? AND status = 'paused'"
+    ).bind(phone, tenantId).first();
+    if (pausedConv) {
+      console.log(`Conversación pausada para ${phone} en tenant ${tenantId}`);
+      return new Response("OK", { status: 200 });
+    }
+    
     // Extraer texto (puede venir en conversation o extendedTextMessage.text)
     const msg = data.message || {};
     let text = "";
@@ -2551,7 +2703,7 @@ async function handleWhatsAppWebhook(request, env2) {
       return `${i + 1}. ${s.nombre} — ${s.descripcion || "Servicio profesional"} — ${precioStr} (${s.categoria || "General"}, ~${s.duracion_minutos} min)`;
     }).join("\n");
     
-    const systemPrompt = buildWhatsAppSystemPrompt(env2, serviciosText, conversation, pushName, tenantName, tenantPhone);
+    const systemPrompt = await buildWhatsAppSystemPrompt(env2, tenantId, serviciosText, conversation, pushName, tenantName, tenantPhone);
     
     // 4. Llamar a Llama 3.2 3B CON function calling
     const chatMessages = [{ role: "system", content: systemPrompt }];
@@ -2817,7 +2969,46 @@ Si necesitas reprogramar, escribenos por aqui \u{1F60A}`;
 }
 __name(handleWhatsAppWebhook, "handleWhatsAppWebhook");
 
-function buildWhatsAppSystemPrompt(env2, serviciosText, conversation, pushName, tenantName, tenantPhone) {
+async function buildWhatsAppSystemPrompt(env2, tenantId, serviciosText, conversation, pushName, tenantName, tenantPhone) {
+  // Cargar prompt personalizado del tenant si existe
+  if (env2 && env2.DB && tenantId) {
+    try {
+      const customPrompt = await env2.DB.prepare(
+        "SELECT valor FROM sgc_cit_config WHERE tenant_id = ? AND clave = 'custom_prompt'"
+      ).bind(tenantId).first();
+      if (customPrompt?.valor) {
+        let botName = "Sofi";
+        try {
+          const botNameCfg = await env2.DB.prepare(
+            "SELECT valor FROM sgc_cit_config WHERE tenant_id = ? AND clave = 'bot_name'"
+          ).bind(tenantId).first();
+          if (botNameCfg?.valor) botName = botNameCfg.valor;
+        } catch (e) {}
+        let clientContext = "Nuevo cliente";
+        if (conversation?.client_context) {
+          try {
+            const ctx = JSON.parse(conversation.client_context);
+            const parts = [];
+            if (ctx.nombre) parts.push("Nombre: " + ctx.nombre);
+            if (ctx.patente) parts.push("Patente: " + ctx.patente);
+            if (ctx.marca) parts.push("Vehiculo: " + ctx.marca + " " + (ctx.modelo || ""));
+            if (parts.length > 0) clientContext = "Cliente conocido:\n" + parts.join("\n");
+          } catch (e) {}
+        }
+        let custom = customPrompt.valor
+          .replace(/\{business_name\}/g, tenantName || env2.BUSINESS_NAME || "")
+          .replace(/\{bot_name\}/g, botName)
+          .replace(/\{servicios\}/g, serviciosText || "")
+          .replace(/\{push_name\}/g, pushName || "desconocido")
+          .replace(/\{phone\}/g, conversation?.phone || "")
+          .replace(/\{tenant_phone\}/g, tenantPhone || env2.BUSINESS_PHONE || "")
+          .replace(/\{client_context\}/g, clientContext);
+        return custom;
+      }
+    } catch (e) {
+      console.error("Error cargando custom_prompt en buildWhatsAppSystemPrompt:", e);
+    }
+  }
   const now = new Date();
   const tz = "America/Santiago";
   const fmtDate = new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" });
@@ -3504,6 +3695,85 @@ async function handleAdminCommand(env2, body) {
           reply += `• ${t.business_name} (${t.slug})\n  ${t.rubro} | ${t.whatsapp_number}\n\n`;
         }
       }
+    } else if (cmd === "PAUSAR" || cmd === "PAUSA") {
+      // PAUSAR sin argumento = pausar todo el bot
+      // PAUSAR <número> = pausar un número específico
+      if (slug) {
+        // Pausar número específico
+        const num = slug.replace(/[^0-9]/g, "");
+        const conv = await env2.DB.prepare(
+          "SELECT id, contact_name FROM sgc_cit_WhatsApp_conversations WHERE phone = ? AND tenant_id = ?"
+        ).bind(num, 1).first();
+        if (conv) {
+          await env2.DB.prepare(
+            "UPDATE sgc_cit_WhatsApp_conversations SET status = 'paused' WHERE id = ?"
+          ).bind(conv.id).run();
+          reply = `⏸️ Bot pausado para el número ${num} (${conv.contact_name || "sin nombre"}).\n\nYa no responderá a sus mensajes.\n\nPara reactivar: REACTIVAR ${num}`;
+        } else {
+          reply = `❌ No se encontró conversación con el número ${num}.`;
+        }
+      } else {
+        // Pausar todo el bot
+        await env2.DB.prepare(
+          "INSERT OR REPLACE INTO sgc_cit_config (tenant_id, clave, valor, updated_at) VALUES (1, 'bot_paused', 'true', datetime('now','-3 hours'))"
+        ).run();
+        reply = `⏸️ *Bot PAUSADO*\n\nEl bot NO responderá a ningún mensaje nuevo.\n\nPara reactivar: REACTIVAR`;
+      }
+      await env2.DB.prepare(
+        "INSERT INTO admin_commands (command, slug, admin_phone, result) VALUES (?, ?, ?, ?)"
+      ).bind("PAUSAR", slug || null, phone, "success").run();
+    } else if (cmd === "REACTIVAR" || cmd === "ACTIVAR" || cmd === "REANUDAR") {
+      // REACTIVAR sin argumento = reactivar todo el bot
+      // REACTIVAR <número> = reactivar un número específico
+      if (slug) {
+        const num = slug.replace(/[^0-9]/g, "");
+        const conv = await env2.DB.prepare(
+          "SELECT id, contact_name FROM sgc_cit_WhatsApp_conversations WHERE phone = ? AND tenant_id = ?"
+        ).bind(num, 1).first();
+        if (conv) {
+          await env2.DB.prepare(
+            "UPDATE sgc_cit_WhatsApp_conversations SET status = 'active' WHERE id = ?"
+          ).bind(conv.id).run();
+          reply = `✅ Bot reactivado para el número ${num}.\n\nYa volverá a responder sus mensajes.`;
+        } else {
+          reply = `❌ No se encontró conversación con el número ${num}.`;
+        }
+      } else {
+        // Reactivar todo el bot
+        await env2.DB.prepare(
+          "INSERT OR REPLACE INTO sgc_cit_config (tenant_id, clave, valor, updated_at) VALUES (1, 'bot_paused', 'false', datetime('now','-3 hours'))"
+        ).run();
+        reply = `✅ *Bot REACTIVADO*\n\nEl bot volverá a responder todos los mensajes.`;
+      }
+      await env2.DB.prepare(
+        "INSERT INTO admin_commands (command, slug, admin_phone, result) VALUES (?, ?, ?, ?)"
+      ).bind("REACTIVAR", slug || null, phone, "success").run();
+    } else if (cmd === "ESTADO" || cmd === "STATUS") {
+      // Ver estado del bot
+      const pausedConfig = await env2.DB.prepare(
+        "SELECT valor FROM sgc_cit_config WHERE tenant_id = 1 AND clave = 'bot_paused'"
+      ).first();
+      const isPaused = pausedConfig?.valor === 'true';
+      
+      const pausedConv = await env2.DB.prepare(
+        "SELECT phone, contact_name FROM sgc_cit_WhatsApp_conversations WHERE tenant_id = 1 AND status = 'paused'"
+      ).all();
+      const pausedList = pausedConv.results || [];
+      
+      reply = `📊 *Estado del Bot*\n\n`;
+      reply += `Bot global: ${isPaused ? '⏸️ PAUSADO' : '✅ Activo'}\n\n`;
+      if (pausedList.length > 0) {
+        reply += `Números pausados (${pausedList.length}):\n`;
+        for (const c of pausedList) {
+          reply += `• ${c.phone} (${c.contact_name || 'sin nombre'})\n`;
+        }
+        reply += `\nPara reactivar: REACTIVAR <número>`;
+      } else {
+        reply += `Números pausados: ninguno`;
+      }
+      await env2.DB.prepare(
+        "INSERT INTO admin_commands (command, slug, admin_phone, result) VALUES (?, ?, ?, ?)"
+      ).bind("ESTADO", null, phone, isPaused ? "paused" : "active").run();
     } else if (cmd === "SUSPENDER") {
       const tenant = await env2.DB.prepare("SELECT * FROM tenants WHERE slug = ?").bind(slug).first();
       if (!tenant) {
@@ -3521,6 +3791,11 @@ async function handleAdminCommand(env2, body) {
       reply += `*ACTIVOS* - Ver tenants activos\n`;
       reply += `*APROBAR <slug>* - Aprobar y crear bot\n`;
       reply += `*RECHAZAR <slug>* - Rechazar solicitud\n`;
+      reply += `*PAUSAR* - Pausar el bot (no responde nadie)\n`;
+      reply += `*PAUSAR <numero>* - Pausar un número específico\n`;
+      reply += `*REACTIVAR* - Reactivar el bot\n`;
+      reply += `*REACTIVAR <numero>* - Reactivar un número\n`;
+      reply += `*ESTADO* - Ver si el bot está activo o pausado\n`;
       reply += `*SUSPENDER <slug>* - Suspender tenant\n`;
       reply += `*AYUDA* - Esta ayuda\n`;
       reply += `\nEjemplo: APROBAR barberia-don-juan`;
