@@ -2627,10 +2627,10 @@ async function handleWhatsAppWebhook(request, env2) {
     
     // ===== CHECK DE DUEÑO (antes de fromMe) =====
     // Si el mensaje viene del dueño del negocio (incluso fromMe=true), procesar como comando
-    const remoteJid = key.remoteJid || "";
-    if (remoteJid.includes("@s.whatsapp.net")) {
+    const ownerJid = key.remoteJid || "";
+    if (ownerJid.includes("@s.whatsapp.net")) {
       const ownerPhone = (tenant.whatsapp_number || "").replace(/[^0-9]/g, "");
-      const ownerPhoneCheck = remoteJid.replace("@s.whatsapp.net", "");
+      const ownerPhoneCheck = ownerJid.replace("@s.whatsapp.net", "");
       if (ownerPhone && ownerPhoneCheck === ownerPhone && key.fromMe === true) {
         console.log(`OWNER DETECTED: ${ownerPhoneCheck} es dueño de tenant ${tenant?.id}`);
         return await handleOwnerCommand(env2, body, tenant, ownerPhoneCheck);
