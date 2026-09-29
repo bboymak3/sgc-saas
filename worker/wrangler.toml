@@ -1,0 +1,29 @@
+name = "sgc-saas"
+main = "index.js"
+compatibility_date = "2025-10-08"
+compatibility_flags = ["nodejs_compat"]
+
+[assets]
+directory = "./assets"
+binding = "ASSETS"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "citas"
+database_id = "678b4adc-232d-43db-86ec-230828268161"
+
+[[d1_databases]]
+binding = "TALLER_DB"
+database_name = "citas"
+database_id = "678b4adc-232d-43db-86ec-230828268161"
+
+[ai]
+binding = "AI"
+
+[vars]
+BUSINESS_NAME = "SGC"
+BUSINESS_PHONE = "56939026185"
+SGCORDENES_URL = "https://sgc-ordenes-di7.pages.dev"
+EVOLUTION_API_URL = "https://evolution-api-production-91a07.up.railway.app"
+EVOLUTION_INSTANCE_NAME = "make peueba"
+ADMIN_PHONE = "584167775771"

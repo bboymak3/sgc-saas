@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bot WhatsApp IA — Gratis para tu negocio</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0a0a0a; color: #e8e8e8; line-height: 1.6; }
+    .container { max-width: 1100px; margin: 0 auto; padding: 0 20px; }
+    
+    /* Hero */
+    .hero { padding: 80px 0 60px; text-align: center; background: linear-gradient(135deg, #16a34a 0%, #15803d 100%); }
+    .hero h1 { font-size: 2.8rem; margin-bottom: 16px; color: #fff; line-height: 1.2; }
+    .hero p { font-size: 1.2rem; color: rgba(255,255,255,0.95); max-width: 700px; margin: 0 auto 24px; }
+    .hero .cta { display: inline-block; background: #fff; color: #16a34a; padding: 14px 32px; border-radius: 50px; text-decoration: none; font-weight: 700; font-size: 1.1rem; transition: transform 0.2s; }
+    .hero .cta:hover { transform: scale(1.05); }
+    .hero .badge { display: inline-block; background: rgba(255,255,255,0.2); color: #fff; padding: 6px 16px; border-radius: 50px; font-size: 0.9rem; margin-bottom: 20px; }
+    
+    /* Features */
+    .features { padding: 60px 0; }
+    .features h2 { text-align: center; font-size: 2rem; margin-bottom: 40px; color: #22c55e; }
+    .features-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 24px; }
+    .feature { background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 12px; padding: 24px; }
+    .feature .icon { font-size: 2rem; margin-bottom: 12px; }
+    .feature h3 { color: #22c55e; margin-bottom: 8px; font-size: 1.2rem; }
+    .feature p { color: #aaa; font-size: 0.95rem; }
+    
+    /* Nichos */
+    .nichos { padding: 60px 0; background: #111; }
+    .nichos h2 { text-align: center; font-size: 2rem; margin-bottom: 30px; color: #22c55e; }
+    .nichos-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 16px; max-width: 800px; margin: 0 auto; }
+    .nicho { background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 10px; padding: 20px; text-align: center; transition: all 0.2s; }
+    .nicho:hover { border-color: #22c55e; transform: translateY(-4px); }
+    .nicho .icon { font-size: 2rem; margin-bottom: 8px; }
+    .nicho .name { font-weight: 600; color: #fff; }
+    
+    /* Form */
+    .form-section { padding: 60px 0; }
+    .form-section h2 { text-align: center; font-size: 2rem; margin-bottom: 16px; color: #22c55e; }
+    .form-section .subtitle { text-align: center; color: #aaa; margin-bottom: 40px; font-size: 1.1rem; }
+    .form-card { max-width: 500px; margin: 0 auto; background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 16px; padding: 32px; }
+    .form-group { margin-bottom: 18px; }
+    .form-group label { display: block; margin-bottom: 6px; font-weight: 600; color: #ccc; font-size: 0.9rem; }
+    .form-group input, .form-group select { width: 100%; padding: 12px; background: #0a0a0a; border: 1px solid #2a2a2a; border-radius: 8px; color: #fff; font-size: 1rem; }
+    .form-group input:focus, .form-group select:focus { outline: none; border-color: #22c55e; }
+    .form-group .hint { font-size: 0.8rem; color: #666; margin-top: 4px; }
+    .btn-submit { width: 100%; background: #16a34a; color: #fff; border: none; padding: 14px; border-radius: 8px; font-size: 1.1rem; font-weight: 700; cursor: pointer; transition: background 0.2s; }
+    .btn-submit:hover { background: #15803d; }
+    .btn-submit:disabled { opacity: 0.5; cursor: not-allowed; }
+    .form-msg { margin-top: 16px; padding: 12px; border-radius: 8px; text-align: center; }
+    .form-msg.success { background: rgba(34,197,94,0.1); color: #22c55e; border: 1px solid #22c55e; }
+    .form-msg.error { background: rgba(239,68,68,0.1); color: #ef4444; border: 1px solid #ef4444; }
+    
+    /* Steps */
+    .steps { padding: 60px 0; background: #111; }
+    .steps h2 { text-align: center; font-size: 2rem; margin-bottom: 40px; color: #22c55e; }
+    .steps-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 24px; max-width: 900px; margin: 0 auto; }
+    .step { text-align: center; }
+    .step .num { display: inline-block; width: 50px; height: 50px; line-height: 50px; background: #16a34a; color: #fff; border-radius: 50%; font-size: 1.5rem; font-weight: 700; margin-bottom: 12px; }
+    .step h3 { color: #fff; margin-bottom: 8px; }
+    .step p { color: #aaa; font-size: 0.95rem; }
+    
+    footer { padding: 30px 0; text-align: center; color: #666; font-size: 0.9rem; border-top: 1px solid #2a2a2a; }
+    
+    @media (max-width: 600px) {
+      .hero h1 { font-size: 2rem; }
+      .hero p { font-size: 1rem; }
+    }
+  </style>
+</head>
+<body>
+  <section class="hero">
+    <div class="container">
+      <div class="badge">⚡ 100% GRATIS · Sin papeleo · Sin tarjeta de crédito</div>
+      <h1>Bot de WhatsApp con IA para tu negocio</h1>
+      <p>Agenda citas automáticamente por WhatsApp con inteligencia artificial. Tus clientes te escriben y el bot agenda por ti. Tú solo apruebas.</p>
+      <a href="#registro" class="cta">Solicitar mi bot gratis →</a>
+    </div>
+  </section>
+  
+  <section class="features">
+    <div class="container">
+      <h2>¿Qué hace el bot?</h2>
+      <div class="features-grid">
+        <div class="feature">
+          <div class="icon">🤖</div>
+          <h3>Agenda con IA</h3>
+          <p>El bot conversa con tus clientes y agenda citas automáticamente. Solo tú apruebas en tu panel.</p>
+        </div>
+        <div class="feature">
+          <div class="icon">📱</div>
+          <h3>Tu WhatsApp actual</h3>
+          <p>Funciona con tu número de WhatsApp actual. Sin cambiar de número ni trámites.</p>
+        </div>
+        <div class="feature">
+          <div class="icon">💬</div>
+          <h3>Responde 24/7</h3>
+          <p>Nunca más pierdas un cliente porque no respondiste a tiempo. El bot atiende siempre.</p>
+        </div>
+        <div class="feature">
+          <div class="icon">📊</div>
+          <h3>Panel admin</h3>
+          <p>Visualiza todas las citas, aprueba o rechaza con un click, asigna técnicos.</p>
+        </div>
+        <div class="feature">
+          <div class="icon">🔧</div>
+          <h3>Personalizable</h3>
+          <p>Cambia servicios, precios, horarios. El bot aprende y se adapta a tu negocio.</p>
+        </div>
+        <div class="feature">
+          <div class="icon">🆓</div>
+          <h3>Gratis de verdad</h3>
+          <p>Sin costo de setup. Sin mensualidad. Sin tarjeta. Lo pagas solo si creces mucho.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+  
+  <section class="nichos">
+    <div class="container">
+      <h2>Funciona para cualquier negocio de citas</h2>
+      <div class="nichos-grid">
+        <div class="nicho"><div class="icon">🔧</div><div class="name">Taller Mecánico</div></div>
+        <div class="nicho"><div class="icon">💈</div><div class="name">Barbería</div></div>
+        <div class="nicho"><div class="icon">🦷</div><div class="name">Clínica Dental</div></div>
+        <div class="nicho"><div class="icon">💅</div><div class="name">Salón de Belleza</div></div>
+        <div class="nicho"><div class="icon">🐾</div><div class="name">Veterinaria</div></div>
+        <div class="nicho"><div class="icon">💆</div><div class="name">Spa / Masajes</div></div>
+        <div class="nicho"><div class="icon">📸</div><div class="name">Fotografía</div></div>
+        <div class="nicho"><div class="icon">⚖️</div><div class="name">Abogados</div></div>
+      </div>
+    </div>
+  </section>
+  
+  <section class="steps">
+    <div class="container">
+      <h2>¿Cómo funciona?</h2>
+      <div class="steps-grid">
+        <div class="step">
+          <div class="num">1</div>
+          <h3>Solicita tu bot</h3>
+          <p>Llena el formulario con los datos de tu negocio. Toma 1 minuto.</p>
+        </div>
+        <div class="step">
+          <div class="num">2</div>
+          <h3>Aprobación rápida</h3>
+          <p>Validamos tu solicitud y te contactamos por WhatsApp en minutos.</p>
+        </div>
+        <div class="step">
+          <div class="num">3</div>
+          <h3>Escanea el QR</h3>
+          <p>Conectas tu WhatsApp escaneando un código QR. 2 minutos.</p>
+        </div>
+        <div class="step">
+          <div class="num">4</div>
+          <h3>¡Bot activo!</h3>
+          <p>Tus clientes pueden escribirte y el bot agenda por ti. Tú apruebas.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+  
+  <section class="form-section" id="registro">
+    <div class="container">
+      <h2>Solicita tu bot gratis</h2>
+      <p class="subtitle">Sin costo · Sin tarjeta de crédito · Funciona en 5 minutos</p>
+      <div class="form-card">
+        <form id="registerForm">
+          <div class="form-group">
+            <label for="business_name">Nombre del negocio *</label>
+            <input type="text" id="business_name" name="business_name" required placeholder="Ej: Barbería Don Juan">
+          </div>
+          <div class="form-group">
+            <label for="rubro">Rubro *</label>
+            <select id="rubro" name="rubro" required>
+              <option value="">Selecciona tu rubro</option>
+              <option value="taller">🔧 Taller Mecánico</option>
+              <option value="barberia">💈 Barbería</option>
+              <option value="clinica_dental">🦷 Clínica Dental</option>
+              <option value="salon_belleza">💅 Salón de Belleza</option>
+              <option value="veterinaria">🐾 Veterinaria</option>
+              <option value="otro">💼 Otro</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="whatsapp_number">WhatsApp a conectar *</label>
+            <input type="tel" id="whatsapp_number" name="whatsapp_number" required placeholder="Ej: +56912345678">
+            <div class="hint">Número de WhatsApp donde el bot recibirá los mensajes de tus clientes</div>
+          </div>
+          <div class="form-group">
+            <label for="email">Email (opcional)</label>
+            <input type="email" id="email" name="email" placeholder="tu@email.com">
+            <div class="hint">Para enviarte las credenciales de tu panel admin</div>
+          </div>
+          <button type="submit" class="btn-submit" id="submitBtn">Solicitar mi bot gratis →</button>
+          <div id="formMsg" class="form-msg" style="display:none;"></div>
+        </form>
+      </div>
+    </div>
+  </section>
+  
+  <footer>
+    <div class="container">
+      <p>Bot WhatsApp con IA · Hecho con ❤️ en Chile · Cloudflare + Evolution API</p>
+      <p style="margin-top:8px;">¿Preguntas? Escríbenos al +58 416-7775771</p>
+    </div>
+  </footer>
+  
+  <script>
+    document.getElementById('registerForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = document.getElementById('submitBtn');
+      const msg = document.getElementById('formMsg');
+      const formData = new FormData(e.target);
+      const data = Object.fromEntries(formData);
+      
+      btn.disabled = true;
+      btn.textContent = 'Enviando...';
+      msg.style.display = 'none';
+      
+      try {
+        const res = await fetch('https://sgc-saas.activo.workers.dev/api/onboarding/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+        const result = await res.json();
+        
+        if (result.success) {
+          msg.className = 'form-msg success';
+          msg.innerHTML = `✅ ¡Solicitud enviada!<br><br>Tu solicitud fue recibida. Te avisaremos por WhatsApp cuando sea aprobada (generalmente en minutos).<br><br><a href="status.html?slug=${result.slug}" style="color:#22c55e;font-weight:700;">Ver estado de mi solicitud →</a>`;
+          msg.style.display = 'block';
+          btn.textContent = '✓ Solicitud enviada';
+          e.target.reset();
+        } else {
+          throw new Error(result.error || 'Error desconocido');
+        }
+      } catch (error) {
+        msg.className = 'form-msg error';
+        msg.textContent = '❌ Error: ' + error.message;
+        msg.style.display = 'block';
+        btn.disabled = false;
+        btn.textContent = 'Solicitar mi bot gratis →';
+      }
+    });
+  </script>
+</body>
+</html>

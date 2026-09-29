@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Estado de mi solicitud — Bot WhatsApp</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0a0a0a; color: #e8e8e8; min-height: 100vh; padding: 40px 20px; }
+    .container { max-width: 600px; margin: 0 auto; }
+    .card { background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 16px; padding: 32px; margin-bottom: 20px; }
+    h1 { color: #22c55e; margin-bottom: 8px; }
+    .subtitle { color: #aaa; margin-bottom: 24px; }
+    .status-pending { background: rgba(251,191,36,0.1); color: #fbbf24; padding: 12px; border-radius: 8px; border: 1px solid #fbbf24; margin-bottom: 16px; }
+    .status-approved { background: rgba(34,197,94,0.1); color: #22c55e; padding: 12px; border-radius: 8px; border: 1px solid #22c55e; margin-bottom: 16px; }
+    .status-rejected { background: rgba(239,68,68,0.1); color: #ef4444; padding: 12px; border-radius: 8px; border: 1px solid #ef4444; margin-bottom: 16px; }
+    .status-active { background: rgba(34,197,94,0.1); color: #22c55e; padding: 12px; border-radius: 8px; border: 1px solid #22c55e; margin-bottom: 16px; }
+    .info { margin: 16px 0; }
+    .info-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #2a2a2a; }
+    .info-row .label { color: #aaa; }
+    .info-row .value { color: #fff; font-weight: 600; }
+    .qr-box { text-align: center; margin: 24px 0; }
+    .qr-box img { max-width: 300px; border: 4px solid #fff; border-radius: 12px; padding: 12px; background: #fff; }
+    .instructions { background: #0a0a0a; padding: 16px; border-radius: 8px; margin-top: 16px; }
+    .instructions ol { padding-left: 20px; }
+    .instructions li { margin: 8px 0; color: #ccc; }
+    .btn { display: inline-block; padding: 12px 24px; background: #16a34a; color: #fff; text-decoration: none; border-radius: 8px; font-weight: 700; margin-top: 16px; }
+    .btn:hover { background: #15803d; }
+    .loading { text-align: center; padding: 40px; color: #aaa; }
+    .loading .spinner { display: inline-block; width: 32px; height: 32px; border: 3px solid #2a2a2a; border-top-color: #22c55e; border-radius: 50%; animation: spin 0.8s linear infinite; margin-bottom: 12px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div id="content">
+      <div class="loading">
+        <div class="spinner"></div>
+        <p>Cargando estado...</p>
+      </div>
+    </div>
+  </div>
+  
+  <script>
+    const urlParams = new URLSearchParams(window.location.search);
+    const slug = urlParams.get('slug');
+    
+    if (!slug) {
+      document.getElementById('content').innerHTML = '<div class="card"><h1>Slug requerido</h1><p class="subtitle">Necesitas un slug para ver el estado.</p><a href="index.html" class="btn">← Volver al inicio</a></div>';
+    } else {
+      checkStatus();
+      // Auto-refresh cada 15s si está pending
+      setInterval(checkStatus, 15000);
+    }
+    
+    async function checkStatus() {
+      try {
+        const res = await fetch(`https://sgc-saas.activo.workers.dev/api/onboarding/status?slug=${slug}`);
+        const data = await res.json();
+        
+        if (!data.success) {
+          document.getElementById('content').innerHTML = '<div class="card"><h1>Error</h1><p class="subtitle">' + data.error + '</p><a href="index.html" class="btn">← Volver al inicio</a></div>';
+          return;
+        }
+        
+        const t = data.tenant;
+        let statusClass = 'status-pending';
+        let statusText = 'Pendiente de aprobación';
+        let statusIcon = '⏳';
+        let extraHtml = '';
+        
+        if (t.status === 'pending_approval') {
+          statusClass = 'status-pending';
+          statusText = 'Pendiente de aprobación';
+          statusIcon = '⏳';
+          extraHtml = '<p style="margin-top:16px;color:#aaa;">Estamos validando tu solicitud. Te avisaremos por WhatsApp en cuanto sea aprobada. Esta página se actualiza automáticamente cada 15 segundos.</p>';
+        } else if (t.status === 'approved') {
+          statusClass = 'status-approved';
+          statusText = '¡Aprobado! Escanea el QR';
+          statusIcon = '✅';
+          if (data.qr_url) {
+            extraHtml = `
+              <div class="qr-box">
+                <h3 style="margin-bottom:16px;">📱 Escanea este QR</h3>
+                <iframe src="${data.qr_url}" style="display:none;"></iframe>
+                <p>Para conectar tu WhatsApp:</p>
+                <div class="instructions">
+                  <ol>
+                    <li>Abre WhatsApp en tu celular</li>
+                    <li>Ve a Configuración → Dispositivos vinculados</li>
+                    <li>Toca "Vincular dispositivo"</li>
+                    <li>Escanea el código QR</li>
+                  </ol>
+                </div>
+                <p style="margin-top:16px;color:#22c55e;"> También te enviamos el QR por WhatsApp al número que registraste.</p>
+              </div>
+            `;
+            // Cargar QR via API
+            fetchQR(data.qr_url);
+          }
+        } else if (t.status === 'active') {
+          statusClass = 'status-active';
+          statusText = '¡Bot activo!';
+          statusIcon = '🎉';
+          extraHtml = '<p style="margin-top:16px;color:#22c55e;font-size:1.1rem;">¡Tu bot está funcionando! Prueba escribiéndote desde otro WhatsApp.</p>';
+        } else if (t.status === 'rejected') {
+          statusClass = 'status-rejected';
+          statusText = 'Solicitud rechazada';
+          statusIcon = '❌';
+          extraHtml = '<p style="margin-top:16px;color:#ef4444;">Si crees que fue un error, escríbenos al +58 416-7775771.</p>';
+        } else if (t.status === 'suspended') {
+          statusClass = 'status-rejected';
+          statusText = 'Cuenta suspendida';
+          statusIcon = '⏸️';
+        }
+        
+        document.getElementById('content').innerHTML = `
+          <div class="card">
+            <h1>${statusIcon} ${t.business_name}</h1>
+            <p class="subtitle">Slug: ${t.slug}</p>
+            <div class="${statusClass}">
+              <strong>${statusText}</strong>
+            </div>
+            <div class="info">
+              <div class="info-row"><span class="label">Rubro:</span><span class="value">${t.rubro}</span></div>
+              <div class="info-row"><span class="label">Creado:</span><span class="value">${new Date(t.created_at + 'Z').toLocaleString('es-CL')}</span></div>
+              ${t.approved_at ? `<div class="info-row"><span class="label">Aprobado:</span><span class="value">${new Date(t.approved_at + 'Z').toLocaleString('es-CL')}</span></div>` : ''}
+              ${t.active_at ? `<div class="info-row"><span class="label">Activo desde:</span><span class="value">${new Date(t.active_at + 'Z').toLocaleString('es-CL')}</span></div>` : ''}
+            </div>
+            ${extraHtml}
+            <a href="index.html" class="btn">← Volver al inicio</a>
+          </div>
+        `;
+      } catch (error) {
+        console.error('Error:', error);
+      }
+    }
+    
+    async function fetchQR(qrUrl) {
+      try {
+        // La API de Evolution requiere apikey en header, no podemos llamarla directamente desde el browser
+        // En su lugar, mostramos el link
+        console.log('QR URL:', qrUrl);
+      } catch (e) {
+        console.error('QR fetch error:', e);
+      }
+    }
+  </script>
+</body>
+</html>
