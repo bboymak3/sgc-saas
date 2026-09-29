@@ -837,11 +837,31 @@ globalThis.process = process_default;
 
 // src/index.ts
 var MODEL_ID = "@cf/meta/llama-3.2-3b-instruct";
+var SUPERADMIN_PASSWORD = "admin123";
 var CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization"
+  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Admin-Password"
 };
+function superAdminCheckAuth(request, url) {
+  const headerPwd = request.headers.get("X-Admin-Password") || request.headers.get("x-admin-password");
+  if (headerPwd && headerPwd === SUPERADMIN_PASSWORD) return true;
+  const qp = url.searchParams.get("pwd") || url.searchParams.get("password");
+  if (qp && qp === SUPERADMIN_PASSWORD) return true;
+  return false;
+}
+function superAdminUnauthorized() {
+  return new Response(JSON.stringify({ success: false, error: "No autorizado" }), {
+    status: 401,
+    headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
+  });
+}
+function superAdminJson(data, status) {
+  return new Response(JSON.stringify(data), {
+    status: status || 200,
+    headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
+  });
+}
 function getSystemPrompt(businessName, servicios) {
   const now = /* @__PURE__ */ new Date();
   const tz = "America/Santiago";
@@ -2153,6 +2173,209 @@ Lamentamos las molestias. Para m\xE1s informaci\xF3n o reagendar, contacte direc
           headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
         });
       }
+
+      // ============================================================
+      // SUPER ADMIN ENDPOINTS — Gestión multi-tenant
+      // ============================================================
+      if (path === "/api/superadmin/tenants" && request.method === "GET") {
+        if (!superAdminCheckAuth(request, url)) return superAdminUnauthorized();
+        const tenantsRes = await env2.DB.prepare("SELECT * FROM tenants ORDER BY created_at DESC").all();
+        const tenants = tenantsRes.results || [];
+        const out = [];
+        for (const t of tenants) {
+          const [c1, c2, c3, c4] = await Promise.all([
+            env2.DB.prepare("SELECT COUNT(*) as c FROM sgc_cit_Citas WHERE tenant_id = ?").bind(t.id).first().catch(() => ({ c: 0 })),
+            env2.DB.prepare("SELECT COUNT(*) as c FROM sgc_cit_Citas WHERE tenant_id = ? AND estado_aprobacion = 'pendiente'").bind(t.id).first().catch(() => ({ c: 0 })),
+            env2.DB.prepare("SELECT COUNT(*) as c FROM sgc_cit_servicios_unificados WHERE tenant_id = ? AND activo = 1").bind(t.id).first().catch(() => ({ c: 0 })),
+            env2.DB.prepare("SELECT COUNT(*) as c FROM sgc_cit_WhatsApp_conversations WHERE tenant_id = ?").bind(t.id).first().catch(() => ({ c: 0 }))
+          ]);
+          out.push({
+            id: t.id,
+            slug: t.slug,
+            business_name: t.business_name,
+            rubro: t.rubro,
+            status: t.status,
+            whatsapp_number: t.whatsapp_number,
+            email: t.email,
+            evolution_instance: t.evolution_instance,
+            created_at: t.created_at,
+            approved_at: t.approved_at,
+            active_at: t.active_at,
+            kpis: {
+              citas_total: c1?.c || 0,
+              citas_pendientes: c2?.c || 0,
+              servicios: c3?.c || 0,
+              conversaciones: c4?.c || 0
+            },
+            links: {
+              chat: `https://sgc-saas.pages.dev/chat?t=${t.slug}`,
+              admin: `https://sgc-saas.pages.dev/admin?t=${t.slug}`,
+              status: `https://sgc-saas.pages.dev/status?slug=${t.slug}`
+            }
+          });
+        }
+        return superAdminJson({ success: true, tenants: out, total: out.length });
+      }
+
+      const saQrMatch = path.match(/^\/api\/superadmin\/tenants\/([^/]+)\/qr$/);
+      if (saQrMatch && request.method === "GET") {
+        if (!superAdminCheckAuth(request, url)) return superAdminUnauthorized();
+        const slug = decodeURIComponent(saQrMatch[1]);
+        const tenant = await env2.DB.prepare("SELECT * FROM tenants WHERE slug = ?").bind(slug).first();
+        if (!tenant) return superAdminJson({ success: false, error: "Tenant no encontrado" }, 404);
+        if (!tenant.evolution_instance) return superAdminJson({ success: false, error: "QR no disponible" }, 400);
+        try {
+          const qrRes = await fetch(`${env2.EVOLUTION_API_URL}/instance/connect/${tenant.evolution_instance}`, {
+            headers: { "apikey": env2.EVOLUTION_API_KEY }
+          });
+          const qrData = await qrRes.json().catch(() => ({}));
+          const rawQr = qrData.base64 || qrData.qr || qrData?.data?.base64 || null;
+          if (!rawQr) return superAdminJson({ success: false, error: "QR no disponible" });
+          const base64 = rawQr.startsWith("data:image") ? rawQr : `data:image/png;base64,${rawQr.replace(/^data:image\/[a-z]+;base64,/, "")}`;
+          return superAdminJson({ success: true, qr: base64, instance: tenant.evolution_instance });
+        } catch (e) {
+          return superAdminJson({ success: false, error: "QR no disponible", details: e.message }, 500);
+        }
+      }
+
+      const saApproveMatch = path.match(/^\/api\/superadmin\/tenants\/([^/]+)\/approve$/);
+      if (saApproveMatch && request.method === "POST") {
+        if (!superAdminCheckAuth(request, url)) return superAdminUnauthorized();
+        const slug = decodeURIComponent(saApproveMatch[1]);
+        const tenant = await env2.DB.prepare("SELECT * FROM tenants WHERE slug = ?").bind(slug).first();
+        if (!tenant) return superAdminJson({ success: false, error: "Tenant no encontrado" }, 404);
+
+        await env2.DB.prepare("UPDATE tenants SET status = 'approved', approved_at = datetime('now','-3 hours') WHERE slug = ?").bind(slug).run();
+
+        // Crear instancia en Evolution API si no existe
+        const instanceName = tenant.evolution_instance || ("t_" + slug.replace(/-/g, "_"));
+        let qrBase64 = null;
+        let instanceCreated = false;
+        let instanceError = null;
+
+        try {
+          const createRes = await fetch(`${env2.EVOLUTION_API_URL}/instance/create`, {
+            method: "POST",
+            headers: { "apikey": env2.EVOLUTION_API_KEY, "Content-Type": "application/json" },
+            body: JSON.stringify({
+              instanceName,
+              integration: "WHATSAPP-BAILEYS",
+              webhook: {
+                url: `https://sgc-saas.activo.workers.dev/api/whatsapp/webhook?t=${slug}`,
+                webhook_by_events: false,
+                events: ["messages.upsert", "connection.update"]
+              }
+            })
+          });
+          if (createRes.ok) {
+            instanceCreated = true;
+            for (let attempt = 1; attempt <= 3; attempt++) {
+              await new Promise(r => setTimeout(r, 4000));
+              try {
+                const qrRes = await fetch(`${env2.EVOLUTION_API_URL}/instance/connect/${instanceName}`, {
+                  headers: { "apikey": env2.EVOLUTION_API_KEY }
+                });
+                const qrData = await qrRes.json().catch(() => ({}));
+                const rawQr = qrData.base64 || qrData.qr || null;
+                if (rawQr) {
+                  qrBase64 = rawQr.replace(/^data:image\/[a-z]+;base64,/, "");
+                  break;
+                }
+              } catch (e) { /* retry */ }
+            }
+          } else {
+            const errText = await createRes.text().catch(() => "");
+            instanceError = `HTTP ${createRes.status}: ${errText.substring(0, 200)}`;
+          }
+          await env2.DB.prepare("UPDATE tenants SET evolution_instance = ? WHERE slug = ?").bind(instanceName, slug).run();
+        } catch (e) {
+          instanceError = e.message;
+          console.error("Error creando instancia Evolution:", e);
+        }
+
+        // Cargar servicios default según rubro
+        try {
+          await loadDefaultServices(env2, tenant.id, tenant.rubro || "taller");
+        } catch (e) {
+          console.error("Error cargando servicios default:", e);
+        }
+
+        return superAdminJson({
+          success: true,
+          instance: instanceName,
+          instance_created: instanceCreated,
+          instance_error: instanceError,
+          qr: qrBase64 ? `data:image/png;base64,${qrBase64}` : null,
+          qr_url: `${env2.EVOLUTION_API_URL}/instance/connect/${instanceName}`
+        });
+      }
+
+      const saRejectMatch = path.match(/^\/api\/superadmin\/tenants\/([^/]+)\/reject$/);
+      if (saRejectMatch && request.method === "POST") {
+        if (!superAdminCheckAuth(request, url)) return superAdminUnauthorized();
+        const slug = decodeURIComponent(saRejectMatch[1]);
+        const tenant = await env2.DB.prepare("SELECT * FROM tenants WHERE slug = ?").bind(slug).first();
+        if (!tenant) return superAdminJson({ success: false, error: "Tenant no encontrado" }, 404);
+        await env2.DB.prepare("UPDATE tenants SET status = 'rejected' WHERE slug = ?").bind(slug).run();
+        return superAdminJson({ success: true });
+      }
+
+      const saCitasMatch = path.match(/^\/api\/superadmin\/tenants\/([^/]+)\/citas$/);
+      if (saCitasMatch && request.method === "GET") {
+        if (!superAdminCheckAuth(request, url)) return superAdminUnauthorized();
+        const slug = decodeURIComponent(saCitasMatch[1]);
+        const tenant = await env2.DB.prepare("SELECT id FROM tenants WHERE slug = ?").bind(slug).first();
+        if (!tenant) return superAdminJson({ success: false, error: "Tenant no encontrado" }, 404);
+        const result = await env2.DB.prepare(
+          "SELECT id, fecha_cita, hora_cita, servicio, nombre_cliente, telefono, patente, marca, modelo, estado, estado_aprobacion, motivo_rechazo, canal, created_at FROM sgc_cit_Citas WHERE tenant_id = ? ORDER BY fecha_cita DESC, hora_cita DESC, id DESC LIMIT 200"
+        ).bind(tenant.id).all();
+        return superAdminJson({ success: true, citas: result.results || [], total: (result.results || []).length });
+      }
+
+      if (saCitasMatch && request.method === "POST") {
+        if (!superAdminCheckAuth(request, url)) return superAdminUnauthorized();
+        const slug = decodeURIComponent(saCitasMatch[1]);
+        const tenant = await env2.DB.prepare("SELECT * FROM tenants WHERE slug = ?").bind(slug).first();
+        if (!tenant) return superAdminJson({ success: false, error: "Tenant no encontrado" }, 404);
+        const body = await request.json().catch(() => ({}));
+        if (!body.fecha || !body.hora || !body.servicio || !body.nombre || !body.telefono) {
+          return superAdminJson({ success: false, error: "Faltan campos requeridos: fecha, hora, servicio, nombre, telefono" }, 400);
+        }
+        const tipoAtencion = tenant.rubro === "taller" ? "taller" : "local";
+        const result = await env2.DB.prepare(
+          "INSERT INTO sgc_cit_Citas (fecha_cita, hora_cita, servicio, estado, nombre_cliente, telefono, patente, canal, tipo_atencion, estado_aprobacion, tenant_id, created_at, updated_at) VALUES (?, ?, ?, 'pendiente', ?, ?, ?, 'superadmin', ?, 'pendiente', ?, datetime('now','-3 hours'), datetime('now','-3 hours'))"
+        ).bind(body.fecha, body.hora, body.servicio, body.nombre, body.telefono, body.patente || null, tipoAtencion, tenant.id).run();
+        return superAdminJson({ success: true, cita_id: result.meta?.last_row_id });
+      }
+
+      const saDeleteMatch = path.match(/^\/api\/superadmin\/tenants\/([^/]+)$/);
+      if (saDeleteMatch && request.method === "DELETE") {
+        if (!superAdminCheckAuth(request, url)) return superAdminUnauthorized();
+        const slug = decodeURIComponent(saDeleteMatch[1]);
+        const tenant = await env2.DB.prepare("SELECT * FROM tenants WHERE slug = ?").bind(slug).first();
+        if (!tenant) return superAdminJson({ success: false, error: "Tenant no encontrado" }, 404);
+        // Eliminar todos los datos relacionados del tenant
+        try { await env2.DB.prepare("DELETE FROM sgc_cit_servicios_unificados WHERE tenant_id = ?").bind(tenant.id).run(); } catch (e) {}
+        try { await env2.DB.prepare("DELETE FROM sgc_cit_horarios WHERE tenant_id = ?").bind(tenant.id).run(); } catch (e) {}
+        try { await env2.DB.prepare("DELETE FROM sgc_cit_Citas WHERE tenant_id = ?").bind(tenant.id).run(); } catch (e) {}
+        try { await env2.DB.prepare("DELETE FROM sgc_cit_WhatsApp_conversations WHERE tenant_id = ?").bind(tenant.id).run(); } catch (e) {}
+        try { await env2.DB.prepare("DELETE FROM sgc_cit_WhatsApp_messages WHERE tenant_id = ?").bind(tenant.id).run(); } catch (e) {}
+        await env2.DB.prepare("DELETE FROM tenants WHERE slug = ?").bind(slug).run();
+        // Best effort: eliminar instancia en Evolution API
+        if (tenant.evolution_instance) {
+          try {
+            await fetch(`${env2.EVOLUTION_API_URL}/instance/delete`, {
+              method: "DELETE",
+              headers: { "apikey": env2.EVOLUTION_API_KEY, "Content-Type": "application/json" },
+              body: JSON.stringify({ instanceName: tenant.evolution_instance })
+            });
+          } catch (e) {
+            console.error("Error eliminando instancia Evolution:", e);
+          }
+        }
+        return superAdminJson({ success: true });
+      }
+      // === FIN SUPER ADMIN ENDPOINTS ===
 
       return env2.ASSETS.fetch(request);
     } catch (error) {

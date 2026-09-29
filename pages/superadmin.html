@@ -1,0 +1,1165 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Super Admin — BotWA</title>
+  <meta name="robots" content="noindex,nofollow">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%2322c55e'/%3E%3Cpath d='M32 12c-11 0-20 8.5-20 19 0 3.6 1 7 3 10L12 52l11.5-3c2.8 1.5 6 2.3 9.3 2.3 11 0 20-8.5 20-19S43 12 32 12z' fill='%23fff'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --bg: #0a0a0a;
+      --bg-1: #111111;
+      --bg-2: #1a1a1a;
+      --bg-3: #222222;
+      --border: #2a2a2a;
+      --border-light: #3a3a3a;
+      --text: #e8e8e8;
+      --text-muted: #999;
+      --text-dim: #666;
+      --primary: #22c55e;
+      --primary-dark: #16a34a;
+      --primary-darker: #15803d;
+      --danger: #ef4444;
+      --warn: #fbbf24;
+      --info: #3b82f6;
+      --orange: #fb923c;
+      --radius: 14px;
+      --radius-sm: 10px;
+      --shadow: 0 10px 40px rgba(0,0,0,0.4);
+    }
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg); color: var(--text);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+      min-height: 100vh;
+    }
+    .container { max-width: 1400px; margin: 0 auto; padding: 0 24px; }
+
+    /* ===== Login ===== */
+    .login-wrap {
+      min-height: 100vh; display: flex; align-items: center; justify-content: center;
+      padding: 24px;
+    }
+    .login-card {
+      background: var(--bg-1); border: 1px solid var(--border); border-radius: var(--radius);
+      padding: 40px; max-width: 420px; width: 100%; box-shadow: var(--shadow);
+      animation: fadeUp 0.4s ease;
+    }
+    @keyframes fadeUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    .login-card .logo-mark {
+      width: 56px; height: 56px; border-radius: 14px;
+      background: linear-gradient(135deg, var(--primary), var(--primary-darker));
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 6px 24px rgba(34,197,94,0.4);
+      margin: 0 auto 18px;
+    }
+    .login-card .logo-mark svg { width: 32px; height: 32px; }
+    .login-card h1 { text-align: center; font-size: 1.4rem; font-weight: 800; color: #fff; letter-spacing: -0.5px; }
+    .login-card h1 .accent { color: var(--primary); }
+    .login-card .subtitle { text-align: center; color: var(--text-muted); font-size: 0.9rem; margin: 4px 0 24px; }
+    .login-card label { display: block; font-size: 0.85rem; color: var(--text-muted); margin-bottom: 6px; font-weight: 500; }
+    .login-card input {
+      width: 100%; background: var(--bg-2); border: 1px solid var(--border-light);
+      color: #fff; padding: 12px 14px; border-radius: var(--radius-sm); font-size: 0.95rem;
+      outline: none; transition: border-color 0.15s;
+    }
+    .login-card input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(34,197,94,0.15); }
+    .login-card .btn {
+      width: 100%; background: linear-gradient(135deg, var(--primary), var(--primary-darker));
+      color: #fff; border: none; padding: 12px; border-radius: var(--radius-sm);
+      font-weight: 700; font-size: 0.95rem; cursor: pointer; margin-top: 16px;
+      transition: transform 0.1s, box-shadow 0.2s;
+    }
+    .login-card .btn:hover { box-shadow: 0 6px 20px rgba(34,197,94,0.35); }
+    .login-card .btn:active { transform: translateY(1px); }
+    .login-error {
+      background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.4);
+      color: var(--danger); padding: 10px 12px; border-radius: var(--radius-sm);
+      font-size: 0.85rem; margin-top: 12px; display: none;
+    }
+    .login-error.show { display: block; animation: shake 0.4s; }
+    @keyframes shake { 0%,100% { transform: translateX(0); } 25% { transform: translateX(-6px); } 75% { transform: translateX(6px); } }
+
+    /* ===== Header ===== */
+    header {
+      background: var(--bg-1); border-bottom: 1px solid var(--border);
+      position: sticky; top: 0; z-index: 50;
+    }
+    .header-inner {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 0; gap: 16px;
+    }
+    .brand { display: flex; align-items: center; gap: 12px; }
+    .logo-mark {
+      width: 38px; height: 38px; border-radius: 10px;
+      background: linear-gradient(135deg, var(--primary), var(--primary-darker));
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 6px 20px rgba(34,197,94,0.35);
+    }
+    .logo-mark svg { width: 24px; height: 24px; }
+    .brand-text .brand-name { font-weight: 800; color: #fff; font-size: 1.15rem; letter-spacing: -0.5px; }
+    .brand-text .brand-name .accent { color: var(--primary); }
+    .brand-text .tenant-name { color: var(--text-muted); font-size: 0.85rem; }
+    .header-actions { display: flex; align-items: center; gap: 10px; }
+    .btn-logout {
+      background: var(--bg-2); border: 1px solid var(--border-light); color: var(--text-muted);
+      padding: 8px 14px; border-radius: var(--radius-sm); font-size: 0.85rem; cursor: pointer;
+      transition: all 0.15s;
+    }
+    .btn-logout:hover { background: var(--bg-3); color: #fff; }
+    .refresh-pill {
+      background: var(--bg-2); border: 1px solid var(--border);
+      padding: 6px 12px; border-radius: 999px;
+      font-size: 0.8rem; color: var(--text-muted);
+      display: inline-flex; align-items: center; gap: 6px;
+    }
+    .refresh-pill .dot { width: 6px; height: 6px; background: var(--primary); border-radius: 50%; animation: pulse 2s infinite; }
+    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+    .btn-refresh {
+      background: var(--bg-2); border: 1px solid var(--border-light); color: var(--text-muted);
+      padding: 8px 14px; border-radius: var(--radius-sm); font-size: 0.85rem; cursor: pointer;
+      transition: all 0.15s; display: inline-flex; align-items: center; gap: 6px;
+    }
+    .btn-refresh:hover { background: var(--bg-3); color: #fff; }
+
+    /* ===== Stats grid ===== */
+    .stats-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 14px; padding: 24px 0;
+    }
+    .stat-card {
+      background: var(--bg-1); border: 1px solid var(--border); border-radius: var(--radius);
+      padding: 18px 20px; transition: transform 0.15s, border-color 0.15s;
+    }
+    .stat-card:hover { border-color: var(--border-light); transform: translateY(-2px); }
+    .stat-card .stat-label {
+      color: var(--text-muted); font-size: 0.78rem; font-weight: 500;
+      text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    .stat-card .stat-value {
+      font-size: 2rem; font-weight: 800; color: #fff; margin-top: 6px; letter-spacing: -1px;
+    }
+    .stat-card .stat-icon { font-size: 1.1rem; margin-right: 6px; }
+    .stat-card.accent { border-color: rgba(34,197,94,0.4); }
+    .stat-card.accent .stat-value { color: var(--primary); }
+    .stat-card.warn { border-color: rgba(251,191,36,0.4); }
+    .stat-card.warn .stat-value { color: var(--warn); }
+    .stat-card.info { border-color: rgba(59,130,246,0.4); }
+    .stat-card.info .stat-value { color: var(--info); }
+    .stat-card.orange { border-color: rgba(251,146,60,0.4); }
+    .stat-card.orange .stat-value { color: var(--orange); }
+
+    /* ===== Section heading ===== */
+    .section-heading {
+      display: flex; align-items: center; justify-content: space-between;
+      margin: 8px 0 14px; gap: 16px;
+    }
+    .section-heading h2 { font-size: 1.1rem; font-weight: 700; color: #fff; }
+    .section-heading .count-pill {
+      background: var(--bg-2); border: 1px solid var(--border);
+      padding: 4px 10px; border-radius: 999px; font-size: 0.8rem; color: var(--text-muted);
+      font-weight: 600;
+    }
+
+    /* ===== Tenant cards ===== */
+    .tenants-grid {
+      display: grid; grid-template-columns: 1fr; gap: 14px; padding-bottom: 40px;
+    }
+    @media (min-width: 900px) { .tenants-grid { grid-template-columns: 1fr 1fr; } }
+    .tenant-card {
+      background: var(--bg-1); border: 1px solid var(--border); border-radius: var(--radius);
+      padding: 18px; transition: border-color 0.15s, transform 0.1s;
+      animation: fadeUp 0.3s ease both;
+    }
+    .tenant-card:hover { border-color: var(--border-light); }
+    .tenant-card.pending { border-left: 3px solid var(--orange); }
+    .tenant-card.rejected { border-left: 3px solid var(--danger); }
+    .tenant-card.suspended { border-left: 3px solid var(--text-dim); }
+    .tenant-card.active, .tenant-card.approved { border-left: 3px solid var(--primary); }
+
+    .tenant-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+    .tenant-head .left { display: flex; align-items: flex-start; gap: 12px; min-width: 0; }
+    .tenant-head .rubro-icon {
+      width: 42px; height: 42px; border-radius: 10px;
+      background: var(--bg-2); border: 1px solid var(--border-light);
+      display: flex; align-items: center; justify-content: center; font-size: 1.3rem; flex-shrink: 0;
+    }
+    .tenant-head .info { min-width: 0; }
+    .tenant-head .info h3 {
+      font-size: 1.05rem; font-weight: 700; color: #fff; letter-spacing: -0.3px;
+      word-wrap: break-word;
+    }
+    .tenant-head .info .meta { color: var(--text-muted); font-size: 0.82rem; margin-top: 2px; }
+    .tenant-head .info .meta code { color: var(--primary); font-weight: 600; }
+
+    .status-badge {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 4px 10px; border-radius: 999px; font-size: 0.72rem; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.5px; white-space: nowrap;
+    }
+    .status-badge.active { background: rgba(34,197,94,0.15); color: var(--primary); border: 1px solid rgba(34,197,94,0.4); }
+    .status-badge.approved { background: rgba(251,191,36,0.15); color: var(--warn); border: 1px solid rgba(251,191,36,0.4); }
+    .status-badge.pending { background: rgba(251,146,60,0.15); color: var(--orange); border: 1px solid rgba(251,146,60,0.4); }
+    .status-badge.pending_approval { background: rgba(251,146,60,0.15); color: var(--orange); border: 1px solid rgba(251,146,60,0.4); }
+    .status-badge.rejected { background: rgba(239,68,68,0.15); color: var(--danger); border: 1px solid rgba(239,68,68,0.4); }
+    .status-badge.suspended { background: rgba(102,102,102,0.15); color: var(--text-dim); border: 1px solid rgba(102,102,102,0.4); }
+    .status-badge::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+    .tenant-meta-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+      gap: 10px; margin: 12px 0;
+    }
+    .meta-cell {
+      background: var(--bg-2); border: 1px solid var(--border);
+      border-radius: var(--radius-sm); padding: 8px 10px;
+    }
+    .meta-cell .label { color: var(--text-dim); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.5px; }
+    .meta-cell .value { color: #fff; font-size: 1.1rem; font-weight: 700; margin-top: 2px; }
+    .meta-cell .value.muted { color: var(--text-muted); font-size: 0.85rem; font-weight: 500; word-break: break-all; }
+    .meta-cell .value.small { font-size: 0.85rem; font-weight: 500; }
+    .meta-cell .value.success { color: var(--primary); }
+    .meta-cell .value.warn { color: var(--warn); }
+
+    .actions-row {
+      display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px;
+      padding-top: 12px; border-top: 1px solid var(--border);
+    }
+    .btn {
+      background: var(--bg-2); border: 1px solid var(--border-light); color: var(--text);
+      padding: 7px 11px; border-radius: var(--radius-sm); font-size: 0.8rem; cursor: pointer;
+      transition: all 0.15s; display: inline-flex; align-items: center; gap: 5px;
+      font-weight: 500; text-decoration: none;
+    }
+    .btn:hover { background: var(--bg-3); border-color: var(--text-muted); }
+    .btn.primary { background: rgba(34,197,94,0.15); border-color: rgba(34,197,94,0.4); color: var(--primary); }
+    .btn.primary:hover { background: var(--primary); color: #fff; }
+    .btn.warn { background: rgba(251,191,36,0.15); border-color: rgba(251,191,36,0.4); color: var(--warn); }
+    .btn.warn:hover { background: var(--warn); color: #000; }
+    .btn.danger { background: rgba(239,68,68,0.15); border-color: rgba(239,68,68,0.4); color: var(--danger); }
+    .btn.danger:hover { background: var(--danger); color: #fff; }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn:disabled:hover { background: var(--bg-2); border-color: var(--border-light); color: var(--text); }
+
+    /* ===== Loading / empty states ===== */
+    .center-msg {
+      text-align: center; padding: 60px 20px; color: var(--text-muted);
+    }
+    .center-msg .big { font-size: 2.5rem; margin-bottom: 10px; }
+    .spinner-inline {
+      width: 24px; height: 24px; border: 3px solid var(--border); border-top-color: var(--primary);
+      border-radius: 50%; animation: spin 0.8s linear infinite; display: inline-block;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .toast {
+      position: fixed; bottom: 24px; right: 24px; z-index: 200;
+      background: var(--bg-1); border: 1px solid var(--border); border-radius: var(--radius);
+      padding: 14px 18px; box-shadow: var(--shadow); max-width: 340px;
+      display: flex; align-items: center; gap: 10px; font-size: 0.9rem;
+      animation: slideIn 0.3s ease;
+    }
+    @keyframes slideIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+    .toast.success { border-color: rgba(34,197,94,0.5); }
+    .toast.success .icon { color: var(--primary); }
+    .toast.error { border-color: rgba(239,68,68,0.5); }
+    .toast.error .icon { color: var(--danger); }
+    .toast.info { border-color: rgba(59,130,246,0.5); }
+    .toast.info .icon { color: var(--info); }
+
+    /* ===== Modal ===== */
+    .modal-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.75);
+      display: none; align-items: flex-start; justify-content: center;
+      z-index: 100; padding: 24px; overflow-y: auto;
+      backdrop-filter: blur(2px);
+    }
+    .modal-overlay.show { display: flex; animation: fadeIn 0.2s; }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    .modal {
+      background: var(--bg-1); border: 1px solid var(--border); border-radius: var(--radius);
+      max-width: 560px; width: 100%; box-shadow: var(--shadow);
+      animation: fadeUp 0.25s ease; margin: auto;
+    }
+    .modal.wide { max-width: 800px; }
+    .modal-head {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 16px 20px; border-bottom: 1px solid var(--border); gap: 12px;
+    }
+    .modal-head h3 { font-size: 1.05rem; font-weight: 700; color: #fff; }
+    .modal-head .sub { color: var(--text-muted); font-size: 0.82rem; margin-top: 2px; }
+    .modal-close {
+      background: var(--bg-2); border: 1px solid var(--border-light); color: var(--text-muted);
+      width: 32px; height: 32px; border-radius: 8px; cursor: pointer; font-size: 1.1rem;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .modal-close:hover { background: var(--bg-3); color: #fff; }
+    .modal-body { padding: 20px; }
+    .modal-body.center { text-align: center; }
+    .modal-foot {
+      padding: 14px 20px; border-top: 1px solid var(--border);
+      display: flex; justify-content: flex-end; gap: 8px;
+    }
+
+    /* QR modal */
+    .qr-wrap {
+      display: flex; flex-direction: column; align-items: center; gap: 16px; padding: 8px 0;
+    }
+    .qr-img-box {
+      background: #fff; padding: 12px; border-radius: 12px;
+      box-shadow: 0 6px 24px rgba(0,0,0,0.4);
+    }
+    .qr-img-box img { width: 240px; height: 240px; display: block; }
+    .qr-img-box.placeholder { width: 264px; height: 264px; display: flex; align-items: center; justify-content: center; }
+    .qr-instructions {
+      background: var(--bg-2); border: 1px solid var(--border); border-radius: var(--radius-sm);
+      padding: 12px 14px; font-size: 0.85rem; color: var(--text-muted); text-align: left;
+    }
+    .qr-instructions ol { padding-left: 18px; margin: 6px 0; }
+    .qr-instructions li { margin: 3px 0; }
+    .qr-instance-info {
+      font-family: monospace; font-size: 0.8rem; color: var(--text-dim); text-align: center;
+      word-break: break-all;
+    }
+
+    /* Citas modal */
+    .citas-filters {
+      display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px;
+    }
+    .filter-btn {
+      background: var(--bg-2); border: 1px solid var(--border); color: var(--text-muted);
+      padding: 6px 12px; border-radius: 999px; font-size: 0.78rem; cursor: pointer;
+      transition: all 0.15s; font-weight: 500;
+    }
+    .filter-btn:hover { color: #fff; border-color: var(--text-muted); }
+    .filter-btn.active { background: var(--primary); color: #000; border-color: var(--primary); }
+    .citas-table-wrap { overflow-x: auto; }
+    table.citas-table {
+      width: 100%; border-collapse: collapse; font-size: 0.85rem;
+    }
+    table.citas-table th, table.citas-table td {
+      padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border);
+    }
+    table.citas-table th {
+      color: var(--text-muted); font-weight: 600; font-size: 0.72rem;
+      text-transform: uppercase; letter-spacing: 0.5px; background: var(--bg-2);
+      position: sticky; top: 0;
+    }
+    table.citas-table td { color: var(--text); }
+    table.citas-table tr:hover td { background: rgba(255,255,255,0.02); }
+    .mini-badge {
+      display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 0.7rem; font-weight: 700;
+      text-transform: uppercase;
+    }
+    .mini-badge.pendiente { background: rgba(251,146,60,0.15); color: var(--orange); }
+    .mini-badge.aprobada { background: rgba(34,197,94,0.15); color: var(--primary); }
+    .mini-badge.rechazada { background: rgba(239,68,68,0.15); color: var(--danger); }
+    .mini-badge.confirmada { background: rgba(34,197,94,0.15); color: var(--primary); }
+    .mini-badge.cancelada { background: rgba(102,102,102,0.15); color: var(--text-dim); }
+
+    /* Form */
+    .form-group { margin-bottom: 14px; }
+    .form-group label {
+      display: block; font-size: 0.82rem; color: var(--text-muted); margin-bottom: 6px;
+      font-weight: 500;
+    }
+    .form-group label .req { color: var(--danger); margin-left: 2px; }
+    .form-group input, .form-group select {
+      width: 100%; background: var(--bg-2); border: 1px solid var(--border-light);
+      color: #fff; padding: 10px 12px; border-radius: var(--radius-sm); font-size: 0.92rem;
+      outline: none; transition: border-color 0.15s; font-family: inherit;
+    }
+    .form-group input:focus, .form-group select:focus {
+      border-color: var(--primary); box-shadow: 0 0 0 3px rgba(34,197,94,0.12);
+    }
+    .form-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    @media (max-width: 600px) { .form-grid-2 { grid-template-columns: 1fr; } }
+
+    .loading-shimmer {
+      display: inline-block; color: var(--text-muted); font-style: italic;
+    }
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+
+  <!-- ===== LOGIN SCREEN ===== -->
+  <div id="loginScreen" class="login-wrap">
+    <div class="login-card">
+      <div class="logo-mark">
+        <svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+          <path d="M32 12c-11 0-20 8.5-20 19 0 3.6 1 7 3 10L12 52l11.5-3c2.8 1.5 6 2.3 9.3 2.3 11 0 20-8.5 20-19S43 12 32 12z" fill="#fff"/>
+        </svg>
+      </div>
+      <h1>Bot<span class="accent">WA</span></h1>
+      <p class="subtitle">Super Admin — Acceso restringido</p>
+      <form id="loginForm" autocomplete="off">
+        <label for="pwdInput">Contraseña</label>
+        <input type="password" id="pwdInput" placeholder="Ingresa tu contraseña" autofocus>
+        <button type="submit" class="btn">Entrar →</button>
+      </form>
+      <div id="loginError" class="login-error">❌ Contraseña incorrecta. Intenta de nuevo.</div>
+    </div>
+  </div>
+
+  <!-- ===== MAIN APP ===== -->
+  <div id="app" class="hidden">
+    <header>
+      <div class="container header-inner">
+        <div class="brand">
+          <div class="logo-mark">
+            <svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+              <path d="M32 12c-11 0-20 8.5-20 19 0 3.6 1 7 3 10L12 52l11.5-3c2.8 1.5 6 2.3 9.3 2.3 11 0 20-8.5 20-19S43 12 32 12z" fill="#fff"/>
+            </svg>
+          </div>
+          <div class="brand-text">
+            <div class="brand-name">Bot<span class="accent">WA</span></div>
+            <div class="tenant-name">Super Admin — Gestión de Plataforma</div>
+          </div>
+        </div>
+        <div class="header-actions">
+          <span class="refresh-pill"><span class="dot"></span>Auto-refresh 60s</span>
+          <button class="btn-refresh" onclick="loadTenants()" title="Recargar ahora">↻ Refrescar</button>
+          <button class="btn-logout" onclick="logout()">Cerrar sesión</button>
+        </div>
+      </div>
+    </header>
+
+    <div class="container">
+      <!-- Stats grid -->
+      <div class="stats-grid" id="statsGrid">
+        <div class="stat-card"><div class="stat-label">Total de negocios</div><div class="stat-value" id="stat-total">–</div></div>
+        <div class="stat-card accent"><div class="stat-label">Activos</div><div class="stat-value" id="stat-active">–</div></div>
+        <div class="stat-card orange"><div class="stat-label">Pendientes</div><div class="stat-value" id="stat-pending">–</div></div>
+        <div class="stat-card info"><div class="stat-label">Total de citas</div><div class="stat-value" id="stat-citas">–</div></div>
+        <div class="stat-card warn"><div class="stat-label">Conversaciones</div><div class="stat-value" id="stat-conv">–</div></div>
+      </div>
+
+      <!-- Section heading -->
+      <div class="section-heading">
+        <h2>Negocios</h2>
+        <span class="count-pill" id="tenantsCount">–</span>
+      </div>
+
+      <!-- Tenants grid -->
+      <div class="tenants-grid" id="tenantsGrid">
+        <div class="center-msg"><span class="spinner-inline"></span><div style="margin-top:10px;">Cargando negocios…</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== QR MODAL ===== -->
+  <div class="modal-overlay" id="qrModal">
+    <div class="modal">
+      <div class="modal-head">
+        <div>
+          <h3>📱 Código QR — <span id="qrTenantName"></span></h3>
+          <div class="sub" id="qrInstanceLabel"></div>
+        </div>
+        <button class="modal-close" onclick="closeModal('qrModal')">×</button>
+      </div>
+      <div class="modal-body center" id="qrModalBody">
+        <div class="qr-wrap">
+          <div class="qr-img-box placeholder"><span class="spinner-inline"></span></div>
+          <div class="loading-shimmer">Obteniendo QR…</div>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn" onclick="refreshQR()">↻ Refrescar QR</button>
+        <button class="btn primary" id="qrDownloadBtn" onclick="downloadQR()" disabled>⬇ Descargar QR</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== CITAS MODAL ===== -->
+  <div class="modal-overlay" id="citasModal">
+    <div class="modal wide">
+      <div class="modal-head">
+        <div>
+          <h3>📅 Citas — <span id="citasTenantName"></span></h3>
+          <div class="sub" id="citasCount"></div>
+        </div>
+        <button class="modal-close" onclick="closeModal('citasModal')">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="citas-filters">
+          <button class="filter-btn active" data-filter="todas" onclick="setCitasFilter('todas')">Todas</button>
+          <button class="filter-btn" data-filter="pendiente" onclick="setCitasFilter('pendiente')">Pendientes</button>
+          <button class="filter-btn" data-filter="aprobada" onclick="setCitasFilter('aprobada')">Aprobadas</button>
+          <button class="filter-btn" data-filter="rechazada" onclick="setCitasFilter('rechazada')">Rechazadas</button>
+          <button class="filter-btn" data-filter="confirmada" onclick="setCitasFilter('confirmada')">Confirmadas</button>
+        </div>
+        <div class="citas-table-wrap" id="citasTableWrap">
+          <div class="center-msg"><span class="spinner-inline"></span></div>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn primary" onclick="showCreateCita(currentCitasSlug)">➕ Crear cita</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== CREATE CITA MODAL ===== -->
+  <div class="modal-overlay" id="createCitaModal">
+    <div class="modal">
+      <div class="modal-head">
+        <div>
+          <h3>➕ Crear cita — <span id="createCitaTenantName"></span></h3>
+          <div class="sub">Completa los datos del cliente</div>
+        </div>
+        <button class="modal-close" onclick="closeModal('createCitaModal')">×</button>
+      </div>
+      <div class="modal-body">
+        <form id="createCitaForm" onsubmit="submitCreateCita(event)">
+          <input type="hidden" id="createCitaSlug">
+          <div class="form-grid-2">
+            <div class="form-group">
+              <label>Fecha <span class="req">*</span></label>
+              <input type="date" id="citaFecha" required>
+            </div>
+            <div class="form-group">
+              <label>Hora <span class="req">*</span></label>
+              <input type="time" id="citaHora" required>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Servicio <span class="req">*</span></label>
+            <select id="citaServicio" required>
+              <option value="">Cargando servicios…</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Nombre del cliente <span class="req">*</span></label>
+            <input type="text" id="citaNombre" placeholder="Ej: Juan Pérez" required>
+          </div>
+          <div class="form-grid-2">
+            <div class="form-group">
+              <label>Teléfono <span class="req">*</span></label>
+              <input type="tel" id="citaTelefono" placeholder="Ej: 56987654321" required>
+            </div>
+            <div class="form-group">
+              <label>Patente (opcional)</label>
+              <input type="text" id="citaPatente" placeholder="Ej: ABCD12">
+            </div>
+          </div>
+          <div id="createCitaError" class="login-error"></div>
+        </form>
+      </div>
+      <div class="modal-foot">
+        <button class="btn" onclick="closeModal('createCitaModal')">Cancelar</button>
+        <button class="btn primary" onclick="document.getElementById('createCitaForm').requestSubmit()">Crear cita</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== CONFIRM MODAL ===== -->
+  <div class="modal-overlay" id="confirmModal">
+    <div class="modal">
+      <div class="modal-head">
+        <div><h3 id="confirmTitle">Confirmar</h3></div>
+        <button class="modal-close" onclick="closeModal('confirmModal')">×</button>
+      </div>
+      <div class="modal-body" id="confirmBody">¿Estás seguro?</div>
+      <div class="modal-foot">
+        <button class="btn" onclick="closeModal('confirmModal')">Cancelar</button>
+        <button class="btn danger" id="confirmActionBtn">Confirmar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== TOAST ===== -->
+  <div id="toast" class="toast hidden"></div>
+
+  <script>
+    // ============================================================
+    // CONFIG
+    // ============================================================
+    const API_BASE = 'https://sgc-saas.activo.workers.dev';
+    const STORAGE_KEY = 'botwa_superadmin_pwd';
+    let ADMIN_PWD = localStorage.getItem(STORAGE_KEY) || '';
+
+    let tenants = [];
+    let currentCitasSlug = null;
+    let currentCitas = [];
+    let currentCitasFilter = 'todas';
+    let currentQRSlug = null;
+    let currentQRDataUrl = null;
+    let confirmCallback = null;
+    let autoRefreshTimer = null;
+
+    const RUBRO_ICONS = {
+      taller: '🔧',
+      barberia: '💈',
+      clinica_dental: '🦷',
+      salon_belleza: '💅',
+      veterinaria: '🐾',
+      otro: '🏪'
+    };
+
+    // ============================================================
+    // AUTH / LOGIN
+    // ============================================================
+    function showApp() {
+      document.getElementById('loginScreen').classList.add('hidden');
+      document.getElementById('app').classList.remove('hidden');
+      loadTenants();
+      if (autoRefreshTimer) clearInterval(autoRefreshTimer);
+      autoRefreshTimer = setInterval(loadTenants, 60000);
+    }
+    function showLogin() {
+      document.getElementById('loginScreen').classList.remove('hidden');
+      document.getElementById('app').classList.add('hidden');
+      if (autoRefreshTimer) clearInterval(autoRefreshTimer);
+    }
+    function logout() {
+      localStorage.removeItem(STORAGE_KEY);
+      ADMIN_PWD = '';
+      document.getElementById('pwdInput').value = '';
+      showLogin();
+    }
+    document.getElementById('loginForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const pwd = document.getElementById('pwdInput').value;
+      const errBox = document.getElementById('loginError');
+      errBox.classList.remove('show');
+      // Test auth by trying to load tenants
+      try {
+        const res = await fetch(`${API_BASE}/api/superadmin/tenants?pwd=${encodeURIComponent(pwd)}`);
+        if (res.status === 401) {
+          errBox.classList.add('show');
+          return;
+        }
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        ADMIN_PWD = pwd;
+        localStorage.setItem(STORAGE_KEY, pwd);
+        showApp();
+      } catch (err) {
+        errBox.textContent = '❌ Error de conexión: ' + err.message;
+        errBox.classList.add('show');
+      }
+    });
+
+    // Auto-login if pwd in localStorage
+    if (ADMIN_PWD) {
+      // Verify it still works
+      fetch(`${API_BASE}/api/superadmin/tenants?pwd=${encodeURIComponent(ADMIN_PWD)}`)
+        .then(r => { if (r.ok) showApp(); else showLogin(); })
+        .catch(() => showLogin());
+    } else {
+      showLogin();
+    }
+
+    // ============================================================
+    // API HELPERS
+    // ============================================================
+    async function apiGet(path) {
+      const res = await fetch(`${API_BASE}${path}`, {
+        headers: { 'X-Admin-Password': ADMIN_PWD }
+      });
+      return res.json();
+    }
+    async function apiPost(path, body) {
+      const res = await fetch(`${API_BASE}${path}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Admin-Password': ADMIN_PWD },
+        body: JSON.stringify(body || {})
+      });
+      return res.json();
+    }
+    async function apiDelete(path) {
+      const res = await fetch(`${API_BASE}${path}`, {
+        method: 'DELETE',
+        headers: { 'X-Admin-Password': ADMIN_PWD }
+      });
+      return res.json();
+    }
+
+    // ============================================================
+    // LOAD + RENDER TENANTS
+    // ============================================================
+    async function loadTenants() {
+      try {
+        const data = await apiGet('/api/superadmin/tenants');
+        if (!data.success) {
+          if (data.error === 'No autorizado') { logout(); return; }
+          showToast('error', 'Error: ' + (data.error || 'desconocido'));
+          return;
+        }
+        tenants = data.tenants || [];
+        renderStats();
+        renderTenants();
+      } catch (err) {
+        showToast('error', 'Error de conexión: ' + err.message);
+      }
+    }
+
+    function renderStats() {
+      const total = tenants.length;
+      const active = tenants.filter(t => t.status === 'active' || t.status === 'approved').length;
+      const pending = tenants.filter(t => t.status === 'pending' || t.status === 'pending_approval').length;
+      const citas = tenants.reduce((a, t) => a + (t.kpis?.citas_total || 0), 0);
+      const conv = tenants.reduce((a, t) => a + (t.kpis?.conversaciones || 0), 0);
+      document.getElementById('stat-total').textContent = total;
+      document.getElementById('stat-active').textContent = active;
+      document.getElementById('stat-pending').textContent = pending;
+      document.getElementById('stat-citas').textContent = citas;
+      document.getElementById('stat-conv').textContent = conv;
+      document.getElementById('tenantsCount').textContent = total + (total === 1 ? ' negocio' : ' negocios');
+    }
+
+    function renderTenants() {
+      const grid = document.getElementById('tenantsGrid');
+      if (!tenants.length) {
+        grid.innerHTML = '<div class="center-msg"><div class="big">📭</div>No hay negocios registrados.</div>';
+        return;
+      }
+      grid.innerHTML = tenants.map((t, i) => {
+        const icon = RUBRO_ICONS[t.rubro] || '🏪';
+        const status = t.status || 'pending';
+        const statusLabel = {
+          active: 'Activo',
+          approved: 'Aprobado',
+          pending: 'Pendiente',
+          pending_approval: 'Pendiente',
+          rejected: 'Rechazado',
+          suspended: 'Suspendido'
+        }[status] || status;
+        const isPending = (status === 'pending' || status === 'pending_approval');
+        const created = t.created_at ? new Date(t.created_at.replace(' ', 'T') + 'Z').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+        const waDisplay = t.whatsapp_number ? formatPhone(t.whatsapp_number) : '—';
+        const evoInstance = t.evolution_instance ? `<span title="${escapeHtml(t.evolution_instance)}">${escapeHtml(t.evolution_instance)}</span>` : '<span class="muted">no creada</span>';
+
+        return `
+          <div class="tenant-card ${status}" style="animation-delay:${i * 0.03}s">
+            <div class="tenant-head">
+              <div class="left">
+                <div class="rubro-icon">${icon}</div>
+                <div class="info">
+                  <h3>${escapeHtml(t.business_name)}</h3>
+                  <div class="meta">${escapeHtml(t.rubro || 'otro')} · slug: <code>${escapeHtml(t.slug)}</code></div>
+                </div>
+              </div>
+              <span class="status-badge ${status}">${statusLabel}</span>
+            </div>
+            <div class="tenant-meta-grid">
+              <div class="meta-cell">
+                <div class="label">WhatsApp</div>
+                <div class="value small">${escapeHtml(waDisplay)}</div>
+              </div>
+              <div class="meta-cell">
+                <div class="label">Citas</div>
+                <div class="value">${t.kpis?.citas_total ?? 0}</div>
+              </div>
+              <div class="meta-cell">
+                <div class="label">Pendientes</div>
+                <div class="value ${t.kpis?.citas_pendientes ? 'warn' : ''}">${t.kpis?.citas_pendientes ?? 0}</div>
+              </div>
+              <div class="meta-cell">
+                <div class="label">Servicios</div>
+                <div class="value">${t.kpis?.servicios ?? 0}</div>
+              </div>
+              <div class="meta-cell">
+                <div class="label">Conversaciones</div>
+                <div class="value">${t.kpis?.conversaciones ?? 0}</div>
+              </div>
+              <div class="meta-cell">
+                <div class="label">Creado</div>
+                <div class="value small muted">${created}</div>
+              </div>
+            </div>
+            <div class="meta-cell" style="margin-bottom:12px;">
+              <div class="label">Instancia Evolution</div>
+              <div class="value small ${t.evolution_instance ? 'success' : 'muted'}">${evoInstance}</div>
+            </div>
+            <div class="actions-row">
+              <a class="btn" href="${t.links.chat}" target="_blank" rel="noopener">💬 Chat</a>
+              <a class="btn" href="${t.links.admin}" target="_blank" rel="noopener">🔧 Admin</a>
+              <a class="btn" href="${t.links.status}" target="_blank" rel="noopener">📊 Estado</a>
+              <button class="btn" onclick="showQR('${escapeAttr(t.slug)}')" ${!t.evolution_instance ? 'disabled title="Sin instancia Evolution"' : ''}>📱 Ver QR</button>
+              <button class="btn" onclick="showCitas('${escapeAttr(t.slug)}')">📅 Ver citas</button>
+              <button class="btn primary" onclick="showCreateCita('${escapeAttr(t.slug)}')">➕ Crear cita</button>
+              ${isPending ? `
+                <button class="btn warn" onclick="approveTenant('${escapeAttr(t.slug)}')">✅ Aprobar</button>
+                <button class="btn danger" onclick="rejectTenant('${escapeAttr(t.slug)}')">❌ Rechazar</button>
+              ` : ''}
+              <button class="btn danger" onclick="deleteTenant('${escapeAttr(t.slug)}', '${escapeAttr(t.business_name)}')">🗑 Eliminar</button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // ============================================================
+    // ACTIONS
+    // ============================================================
+    function showConfirm(title, bodyHtml, btnLabel, onConfirm) {
+      document.getElementById('confirmTitle').textContent = title;
+      document.getElementById('confirmBody').innerHTML = bodyHtml;
+      const btn = document.getElementById('confirmActionBtn');
+      btn.textContent = btnLabel;
+      btn.className = 'btn danger';
+      confirmCallback = onConfirm;
+      btn.onclick = () => {
+        closeModal('confirmModal');
+        if (confirmCallback) confirmCallback();
+        confirmCallback = null;
+      };
+      openModal('confirmModal');
+    }
+
+    async function approveTenant(slug) {
+      showConfirm(
+        'Aprobar negocio',
+        `¿Aprobar <strong>${escapeHtml(slug)}</strong>?<br><br>Esto creará la instancia en Evolution API, cargará servicios default según el rubro y marcará el tenant como aprobado.`,
+        '✅ Aprobar',
+        async () => {
+          showToast('info', `Aprobando ${slug}… (puede tardar ~15s)`);
+          const data = await apiPost(`/api/superadmin/tenants/${encodeURIComponent(slug)}/approve`, {});
+          if (data.success) {
+            showToast('success', `✅ ${slug} aprobado. Instancia: ${data.instance}`);
+            await loadTenants();
+            if (data.qr) {
+              setTimeout(() => showQR(slug), 400);
+            }
+          } else {
+            showToast('error', 'Error: ' + (data.error || 'desconocido'));
+          }
+        }
+      );
+    }
+
+    async function rejectTenant(slug) {
+      showConfirm(
+        'Rechazar negocio',
+        `¿Rechazar <strong>${escapeHtml(slug)}</strong>?<br>El negocio pasará a estado "rechazado" y no podrá usar el bot.`,
+        '❌ Rechazar',
+        async () => {
+          const data = await apiPost(`/api/superadmin/tenants/${encodeURIComponent(slug)}/reject`, {});
+          if (data.success) {
+            showToast('success', `🚫 ${slug} rechazado`);
+            loadTenants();
+          } else {
+            showToast('error', 'Error: ' + (data.error || 'desconocido'));
+          }
+        }
+      );
+    }
+
+    function deleteTenant(slug, name) {
+      showConfirm(
+        'Eliminar negocio',
+        `⚠️ <strong>Esta acción es irreversible.</strong><br><br>Se eliminará permanentemente:<br>• El tenant <strong>${escapeHtml(name)}</strong> (${escapeHtml(slug)})<br>• Todas sus citas<br>• Todos sus servicios<br>• Todas sus conversaciones de WhatsApp<br>• Su instancia en Evolution API<br><br>Escribe <code>${escapeHtml(slug)}</code> para confirmar:<br>
+        <input type="text" id="deleteConfirmInput" style="width:100%;margin-top:8px;background:var(--bg-2);border:1px solid var(--border-light);color:#fff;padding:10px;border-radius:10px;font-family:monospace;" oninput="document.getElementById('confirmActionBtn').disabled = this.value !== '${escapeAttr(slug)}'">`,
+        '🗑 Eliminar',
+        async () => {
+          const data = await apiDelete(`/api/superadmin/tenants/${encodeURIComponent(slug)}`);
+          if (data.success) {
+            showToast('success', `🗑 ${slug} eliminado`);
+            loadTenants();
+          } else {
+            showToast('error', 'Error: ' + (data.error || 'desconocido'));
+          }
+        }
+      );
+      // Disable initially
+      setTimeout(() => {
+        const btn = document.getElementById('confirmActionBtn');
+        if (btn) btn.disabled = true;
+      }, 50);
+    }
+
+    // ============================================================
+    // QR MODAL
+    // ============================================================
+    async function showQR(slug) {
+      currentQRSlug = slug;
+      currentQRDataUrl = null;
+      const tenant = tenants.find(t => t.slug === slug);
+      document.getElementById('qrTenantName').textContent = tenant ? tenant.business_name : slug;
+      document.getElementById('qrInstanceLabel').textContent = tenant?.evolution_instance ? `Instancia: ${tenant.evolution_instance}` : '';
+      document.getElementById('qrDownloadBtn').disabled = true;
+      document.getElementById('qrModalBody').innerHTML = `
+        <div class="qr-wrap">
+          <div class="qr-img-box placeholder"><span class="spinner-inline"></span></div>
+          <div class="loading-shimmer">Obteniendo QR…</div>
+        </div>`;
+      openModal('qrModal');
+      await fetchQR();
+       }
+    async function fetchQR() {
+      try {
+        const data = await apiGet(`/api/superadmin/tenants/${encodeURIComponent(currentQRSlug)}/qr`);
+        if (data.success && data.qr) {
+          currentQRDataUrl = data.qr;
+          document.getElementById('qrModalBody').innerHTML = `
+            <div class="qr-wrap">
+              <div class="qr-img-box"><img src="${data.qr}" alt="QR ${escapeAttr(currentQRSlug)}"></div>
+              <div class="qr-instance-info">Instancia: ${escapeHtml(data.instance || '')}</div>
+              <div class="qr-instructions">
+                <strong>📋 Instrucciones:</strong>
+                <ol>
+                  <li>Abre WhatsApp en tu celular</li>
+                  <li>Ve a <strong>Configuración → Dispositivos vinculados → Vincular dispositivo</strong></li>
+                  <li>Apunta la cámara al QR</li>
+                  <li>Espera a que se conecte (puede tardar unos segundos)</li>
+                </ol>
+              </div>
+            </div>`;
+          document.getElementById('qrDownloadBtn').disabled = false;
+        } else {
+          document.getElementById('qrModalBody').innerHTML = `
+            <div class="qr-wrap">
+              <div class="qr-img-box placeholder" style="font-size:2rem;">📵</div>
+              <div style="color:var(--text-muted);">
+                <strong>QR no disponible</strong><br>
+                <span style="font-size:0.85rem;">${escapeHtml(data.error || 'La instancia ya está conectada o no existe QR.')}</span>
+              </div>
+            </div>`;
+          document.getElementById('qrDownloadBtn').disabled = true;
+        }
+      } catch (err) {
+        document.getElementById('qrModalBody').innerHTML = `<div class="center-msg"><div class="big">⚠️</div>Error: ${escapeHtml(err.message)}</div>`;
+      }
+    }
+    function refreshQR() {
+      if (!currentQRSlug) return;
+      document.getElementById('qrModalBody').innerHTML = `
+        <div class="qr-wrap">
+          <div class="qr-img-box placeholder"><span class="spinner-inline"></span></div>
+          <div class="loading-shimmer">Refrescando QR…</div>
+        </div>`;
+      document.getElementById('qrDownloadBtn').disabled = true;
+      fetchQR();
+    }
+    function downloadQR() {
+      if (!currentQRDataUrl) return;
+      const a = document.createElement('a');
+      a.href = currentQRDataUrl;
+      a.download = `qr-${currentQRSlug}.png`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    }
+
+    // ============================================================
+    // CITAS MODAL
+    // ============================================================
+    async function showCitas(slug) {
+      currentCitasSlug = slug;
+      currentCitasFilter = 'todas';
+      // Reset filter buttons
+      document.querySelectorAll('#citasModal .filter-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.filter === 'todas');
+      });
+      const tenant = tenants.find(t => t.slug === slug);
+      document.getElementById('citasTenantName').textContent = tenant ? tenant.business_name : slug;
+      openModal('citasModal');
+      document.getElementById('citasTableWrap').innerHTML = `<div class="center-msg"><span class="spinner-inline"></span></div>`;
+      await fetchCitas();
+    }
+    async function fetchCitas() {
+      try {
+        const data = await apiGet(`/api/superadmin/tenants/${encodeURIComponent(currentCitasSlug)}/citas`);
+        if (!data.success) {
+          document.getElementById('citasTableWrap').innerHTML = `<div class="center-msg"><div class="big">⚠️</div>${escapeHtml(data.error || 'Error')}</div>`;
+          return;
+        }
+        currentCitas = data.citas || [];
+        document.getElementById('citasCount').textContent = `${currentCitas.length} cita(s) registrada(s)`;
+        renderCitasTable();
+      } catch (err) {
+        document.getElementById('citasTableWrap').innerHTML = `<div class="center-msg"><div class="big">⚠️</div>${escapeHtml(err.message)}</div>`;
+      }
+    }
+    function setCitasFilter(filter) {
+      currentCitasFilter = filter;
+      document.querySelectorAll('#citasModal .filter-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.filter === filter);
+      });
+      renderCitasTable();
+    }
+    function renderCitasTable() {
+      const wrap = document.getElementById('citasTableWrap');
+      let list = currentCitas;
+      if (currentCitasFilter !== 'todas') {
+        list = currentCitas.filter(c => c.estado_aprobacion === currentCitasFilter || c.estado === currentCitasFilter);
+      }
+      if (!list.length) {
+        wrap.innerHTML = `<div class="center-msg"><div class="big">📭</div>No hay citas que mostrar.</div>`;
+        return;
+      }
+      wrap.innerHTML = `
+        <table class="citas-table">
+          <thead>
+            <tr>
+              <th>Fecha</th>
+              <th>Hora</th>
+              <th>Servicio</th>
+              <th>Cliente</th>
+              <th>Teléfono</th>
+              <th>Patente</th>
+              <th>Estado</th>
+              <th>Canal</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${list.map(c => `
+              <tr>
+                <td>${escapeHtml(c.fecha_cita || '—')}</td>
+                <td>${escapeHtml(c.hora_cita || '—')}</td>
+                <td>${escapeHtml(c.servicio || '—')}</td>
+                <td>${escapeHtml(c.nombre_cliente || '—')}</td>
+                <td>${escapeHtml(c.telefono || '—')}</td>
+                <td>${escapeHtml(c.patente || '—')}</td>
+                <td><span class="mini-badge ${c.estado_aprobacion || c.estado || ''}">${escapeHtml(c.estado_aprobacion || c.estado || '—')}</span></td>
+                <td>${escapeHtml(c.canal || '—')}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>`;
+    }
+
+    // ============================================================
+    // CREATE CITA
+    // ============================================================
+    async function showCreateCita(slug) {
+      const tenant = tenants.find(t => t.slug === slug);
+      document.getElementById('createCitaTenantName').textContent = tenant ? tenant.business_name : slug;
+      document.getElementById('createCitaSlug').value = slug;
+      document.getElementById('createCitaForm').reset();
+      document.getElementById('createCitaError').classList.remove('show');
+      // Default: tomorrow
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      document.getElementById('citaFecha').value = tomorrow.toISOString().slice(0, 10);
+      document.getElementById('citaHora').value = '10:00';
+      // Load servicios
+      const select = document.getElementById('citaServicio');
+      select.innerHTML = '<option value="">Cargando servicios…</option>';
+      try {
+        const res = await fetch(`${API_BASE}/api/tenant/servicios?t=${encodeURIComponent(slug)}`);
+        const data = await res.json();
+        const servicios = data.servicios || [];
+        if (!servicios.length) {
+          select.innerHTML = '<option value="">Sin servicios (escribe manualmente)</option>';
+          // Allow free-form by making it a text input
+          const newInput = document.createElement('input');
+          newInput.type = 'text';
+          newInput.id = 'citaServicio';
+          newInput.required = true;
+          newInput.placeholder = 'Nombre del servicio';
+          select.replaceWith(newInput);
+        } else {
+          select.innerHTML = '<option value="">— Selecciona —</option>' +
+            servicios.map(s => `<option value="${escapeAttr(s.nombre)}">${escapeHtml(s.nombre)} — $${(s.precio || 0).toLocaleString('es-CL')}</option>`).join('');
+        }
+      } catch (err) {
+        select.innerHTML = '<option value="">Error cargando servicios</option>';
+      }
+      openModal('createCitaModal');
+    }
+    async function submitCreateCita(e) {
+      e.preventDefault();
+      const slug = document.getElementById('createCitaSlug').value;
+      const fecha = document.getElementById('citaFecha').value;
+      const hora = document.getElementById('citaHora').value;
+      const servEl = document.getElementById('citaServicio');
+      const servicio = servEl.value;
+      const nombre = document.getElementById('citaNombre').value.trim();
+      const telefono = document.getElementById('citaTelefono').value.trim();
+      const patente = document.getElementById('citaPatente').value.trim();
+      const errBox = document.getElementById('createCitaError');
+      errBox.classList.remove('show');
+      if (!fecha || !hora || !servicio || !nombre || !telefono) {
+        errBox.textContent = '❌ Faltan campos requeridos';
+        errBox.classList.add('show');
+        return;
+      }
+      try {
+        const data = await apiPost(`/api/superadmin/tenants/${encodeURIComponent(slug)}/citas`, {
+          fecha, hora, servicio, nombre, telefono, patente: patente || null
+        });
+        if (data.success) {
+          showToast('success', `✅ Cita #${data.cita_id} creada para ${slug}`);
+          closeModal('createCitaModal');
+          // If citas modal open for same slug, refresh
+          if (currentCitasSlug === slug && document.getElementById('citasModal').classList.contains('show')) {
+            fetchCitas();
+          }
+          loadTenants();
+        } else {
+          errBox.textContent = '❌ ' + (data.error || 'Error desconocido');
+          errBox.classList.add('show');
+        }
+      } catch (err) {
+        errBox.textContent = '❌ Error: ' + err.message;
+        errBox.classList.add('show');
+      }
+    }
+
+    // ============================================================
+    // MODAL HELPERS
+    // ============================================================
+    function openModal(id) {
+      document.getElementById(id).classList.add('show');
+      document.body.style.overflow = 'hidden';
+    }
+    function closeModal(id) {
+      document.getElementById(id).classList.remove('show');
+      document.body.style.overflow = '';
+    }
+    // Close on overlay click
+    document.querySelectorAll('.modal-overlay').forEach(overlay => {
+      overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) closeModal(overlay.id);
+      });
+    });
+    // Close on Escape
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        document.querySelectorAll('.modal-overlay.show').forEach(m => closeModal(m.id));
+      }
+    });
+
+    // ============================================================
+    // TOAST
+    // ============================================================
+    let toastTimer = null;
+    function showToast(type, msg) {
+      const toast = document.getElementById('toast');
+      const icon = type === 'success' ? '✅' : type === 'error' ? '❌' : 'ℹ️';
+      toast.className = `toast ${type}`;
+      toast.innerHTML = `<span class="icon">${icon}</span><span>${escapeHtml(msg)}</span>`;
+      toast.classList.remove('hidden');
+      if (toastTimer) clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => toast.classList.add('hidden'), 4500);
+    }
+
+    // ============================================================
+    // UTILS
+    // ============================================================
+    function escapeHtml(str) {
+      if (str === null || str === undefined) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+    function escapeAttr(str) {
+      if (str === null || str === undefined) return '';
+      return String(str).replace(/'/g, "\\'").replace(/"/g, '&quot;');
+    }
+    function formatPhone(phone) {
+      if (!phone) return '';
+      const clean = String(phone).replace(/[^0-9+]/g, '');
+      return clean;
+    }
+  </script>
+</body>
+</html>
