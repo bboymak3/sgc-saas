@@ -150,6 +150,6 @@ en `/admin?t=sgc` (panel del negocio) y en el panel de órdenes (sección Citas 
 
 - Workers: `npx wrangler rollback` en cada worker (vuelve a la versión anterior).
 - Pages: re-publica el deployment anterior desde el dashboard de Cloudflare.
-- Base: `npx wrangler d1 time-travel restore citas --timestamp=2026-09-29T10:10:57Z` (o `--bookmark=<bookmark del paso 1>`)`.
+- Base: `npx wrangler d1 time-travel restore citas --timestamp=2026-09-29T10:10:57Z` (o `--bookmark=<bookmark del paso 1>`).
   Ojo: las migraciones 0001, 0003 y 0005 cambian restricciones; el código viejo sigue funcionando con el esquema nuevo,
   así que normalmente **no** hace falta revertir la base al revertir el código.
