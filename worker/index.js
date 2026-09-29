@@ -1262,7 +1262,7 @@ async function resolveTenantForWebhook(env2, body, url) {
   const data = body.data || {};
   const key = data.key || {};
   const phone = (key.remoteJid || "").replace("@s.whatsapp.net", "");
-  if (phone === "584167775771" && !key.fromMe) {
+  if (phone === "584167775771") {
     return { is_admin: true, slug: "admin" };
   }
   
@@ -3715,7 +3715,7 @@ async function handleAdminCommand(env2, body) {
       } else {
         // Pausar todo el bot
         await env2.DB.prepare(
-          "INSERT OR REPLACE INTO sgc_cit_config (tenant_id, clave, valor, updated_at) VALUES (1, 'bot_paused', 'true', datetime('now','-3 hours'))"
+          "INSERT OR REPLACE INTO sgc_cit_config (tenant_id, clave, valor) VALUES (1, 'bot_paused', 'true')"
         ).run();
         reply = `⏸️ *Bot PAUSADO*\n\nEl bot NO responderá a ningún mensaje nuevo.\n\nPara reactivar: REACTIVAR`;
       }
@@ -3741,7 +3741,7 @@ async function handleAdminCommand(env2, body) {
       } else {
         // Reactivar todo el bot
         await env2.DB.prepare(
-          "INSERT OR REPLACE INTO sgc_cit_config (tenant_id, clave, valor, updated_at) VALUES (1, 'bot_paused', 'false', datetime('now','-3 hours'))"
+          "INSERT OR REPLACE INTO sgc_cit_config (tenant_id, clave, valor) VALUES (1, 'bot_paused', 'false')"
         ).run();
         reply = `✅ *Bot REACTIVADO*\n\nEl bot volverá a responder todos los mensajes.`;
       }
