@@ -276,6 +276,82 @@
     }
     .table-toolbar h3 { color: #fff; font-size: 1.1rem; font-weight: 700; }
 
+    /* ===== Stats tab (MEJORA 8) ===== */
+    .stats-toolbar {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 16px; gap: 12px; flex-wrap: wrap;
+    }
+    .stats-toolbar h3 { color: #fff; font-size: 1.1rem; font-weight: 700; }
+    .stats-empty { padding: 60px 20px; text-align: center; color: var(--text-muted); }
+    .stats-empty .emoji { font-size: 2rem; display: block; margin-bottom: 10px; }
+    .stats-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px;
+      margin-bottom: 24px;
+    }
+    .stats-card {
+      background: var(--bg-1); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 22px;
+    }
+    .stats-card h4 {
+      color: #fff; font-size: 1rem; font-weight: 700; margin-bottom: 16px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .stats-card .stats-sub { color: var(--text-muted); font-size: 0.82rem; margin-bottom: 14px; }
+    /* Vertical bar chart */
+    .bar-chart-v {
+      display: flex; align-items: flex-end; gap: 6px;
+      height: 160px; padding-top: 6px; border-bottom: 1px solid var(--border);
+    }
+    .bar-chart-v .bar-col {
+      flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px;
+      min-width: 0;
+    }
+    .bar-chart-v .bar-fill {
+      width: 100%; max-width: 36px;
+      background: linear-gradient(180deg, var(--primary), var(--primary-darker));
+      border-radius: 6px 6px 0 0; min-height: 2px;
+      transition: height 0.3s;
+    }
+    .bar-chart-v .bar-label { font-size: 0.7rem; color: var(--text-muted); }
+    .bar-chart-v .bar-value { font-size: 0.72rem; color: var(--text); font-weight: 600; }
+    /* Horizontal bar chart */
+    .bar-chart-h { display: flex; flex-direction: column; gap: 10px; }
+    .bar-chart-h .hbar-row {
+      display: grid; grid-template-columns: 110px 1fr 40px; gap: 10px; align-items: center;
+    }
+    .bar-chart-h .hbar-label {
+      color: var(--text); font-size: 0.82rem; white-space: nowrap; overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .bar-chart-h .hbar-track {
+      background: var(--bg-2); border-radius: 999px; height: 14px; overflow: hidden;
+      border: 1px solid var(--border);
+    }
+    .bar-chart-h .hbar-fill {
+      background: linear-gradient(90deg, var(--info), #1e40af);
+      height: 100%; border-radius: 999px; min-width: 2px;
+      transition: width 0.3s;
+    }
+    .bar-chart-h .hbar-value {
+      color: var(--text-muted); font-size: 0.82rem; font-weight: 600; text-align: right;
+    }
+    /* Pie chart (SVG) */
+    .pie-wrap { display: flex; align-items: center; gap: 24px; flex-wrap: wrap; }
+    .pie-wrap svg { width: 160px; height: 160px; flex-shrink: 0; }
+    .pie-legend { display: flex; flex-direction: column; gap: 8px; }
+    .pie-legend .pl-row { display: flex; align-items: center; gap: 8px; font-size: 0.86rem; color: var(--text); }
+    .pie-legend .pl-swatch { width: 14px; height: 14px; border-radius: 4px; }
+    .stats-numbers {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px;
+      margin-top: 4px;
+    }
+    .stats-numbers .num-card {
+      background: var(--bg-2); border: 1px solid var(--border);
+      border-radius: var(--radius-sm); padding: 14px; text-align: center;
+    }
+    .stats-numbers .num-card .num-val { font-size: 1.5rem; font-weight: 800; color: #fff; }
+    .stats-numbers .num-card .num-lbl { font-size: 0.78rem; color: var(--text-muted); margin-top: 4px; }
+
     /* ===== Config cards ===== */
     .config-grid {
       display: grid; grid-template-columns: 1fr 1fr; gap: 20px;
@@ -654,6 +730,9 @@
         <button class="tab" data-tab="agenda">
           🗓️ Agenda
         </button>
+        <button class="tab" data-tab="stats">
+          📊 Estadísticas
+        </button>
         <button class="tab" data-tab="servicios">
           🔧 Servicios <span class="count" id="countServ">0</span>
         </button>
@@ -671,6 +750,7 @@
           <button class="filter-pill" data-filter="rechazada">✗ Rechazadas</button>
           <button class="filter-pill" data-filter="hoy">📅 Hoy</button>
           <div class="spacer"></div>
+          <button class="btn btn-secondary btn-sm" id="exportCsvBtn" title="Descargar todas las citas en CSV">⬇ Exportar CSV</button>
           <span class="reload-info"><span class="dot"></span> Auto-refresh cada 30s</span>
         </div>
         <div class="table-wrap">
@@ -716,6 +796,17 @@
           </div>
         </div>
         <div id="calContainer"></div>
+      </div>
+
+      <!-- TAB: Estadísticas (MEJORA 8) -->
+      <div class="tab-content" id="tab-stats">
+        <div class="stats-toolbar">
+          <h3>📊 Estadísticas del negocio</h3>
+          <button class="btn btn-secondary btn-sm" id="refreshStatsBtn">↻ Refrescar</button>
+        </div>
+        <div id="statsContainer">
+          <div class="stats-empty"><span class="emoji">⏳</span>Cargando estadísticas…</div>
+        </div>
       </div>
 
       <!-- TAB: Servicios -->
@@ -822,6 +913,31 @@
         <div class="modal-actions">
           <button type="button" class="btn btn-secondary" id="rechazoCancel">Cancelar</button>
           <button type="submit" class="btn btn-danger">Rechazar cita</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: Reagendar cita (MEJORA 7) -->
+  <div class="modal-overlay" id="reagendarModal">
+    <div class="modal">
+      <h3>Reagendar cita</h3>
+      <form id="reagendarForm">
+        <input type="hidden" id="reagendarCitaId">
+        <div class="form-group">
+          <label for="reagendarFecha">Nueva fecha *</label>
+          <input type="date" id="reagendarFecha" required>
+        </div>
+        <div class="form-group">
+          <label for="reagendarHora">Nueva hora *</label>
+          <input type="time" id="reagendarHora" required>
+        </div>
+        <p style="color:var(--text-muted);font-size:0.85rem;margin-bottom:12px;">
+          ℹ️ Se enviará una notificación por WhatsApp al cliente con la nueva fecha y hora. La cita volverá a estado "pendiente".
+        </p>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-secondary" id="reagendarCancel">Cancelar</button>
+          <button type="submit" class="btn btn-primary" id="reagendarSubmit">Reagendar</button>
         </div>
       </form>
     </div>
@@ -981,11 +1097,16 @@
               <div class="action-btns">
                 ${estado === 'pendiente' ? `
                   <button class="icon-btn approve" title="Aprobar" onclick="aprobarCita(${c.id})">✓</button>
+                  <button class="icon-btn edit" title="Reagendar" onclick="abrirReagendar(${c.id})">📅</button>
                   <button class="icon-btn reject" title="Rechazar" onclick="abrirRechazo(${c.id})">✗</button>
                 ` : estado === 'aprobada' ? `
-                  <button class="icon-btn reject" title="Rechazar" onclick="abrirRechazo(${c.id})">✗</button>
+                  <button class="icon-btn edit" title="Reagendar" onclick="abrirReagendar(${c.id})">📅</button>
+                  <button class="icon-btn reject" title="Cancelar" onclick="cancelarCita(${c.id})">❌</button>
+                ` : estado === 'rechazada' ? `
+                  <button class="icon-btn approve" title="Reactivar (reagendar)" onclick="abrirReagendar(${c.id})">↻</button>
                 ` : `
-                  <span style="color:var(--text-dim);font-size:0.78rem;">—</span>
+                  <button class="icon-btn edit" title="Reagendar" onclick="abrirReagendar(${c.id})">📅</button>
+                  <button class="icon-btn reject" title="Cancelar" onclick="cancelarCita(${c.id})">❌</button>
                 `}
               </div>
             </td>
@@ -1041,6 +1162,196 @@
         toast('error', 'Error al rechazar', err.message);
       }
     });
+
+    // ===== MEJORA 7: Cancelar y Reagendar citas =====
+    window.cancelarCita = async function(id) {
+      if (!confirm('¿Cancelar esta cita? Se enviará una notificación al cliente por WhatsApp.')) return;
+      try {
+        await apiPost(`/api/tenant/citas/${id}/cancelar?t=${encodeURIComponent(SLUG)}`, {});
+        toast('info', 'Cita cancelada', 'Se envió notificación al cliente por WhatsApp.');
+        await loadCitas();
+        await loadCalCitas();
+        await loadDashboard();
+      } catch (err) {
+        toast('error', 'Error al cancelar', err.message);
+      }
+    };
+
+    window.abrirReagendar = function(id) {
+      const c = citasList.find(x => x.id === id);
+      document.getElementById('reagendarCitaId').value = id;
+      // Pre-llenar con la fecha/hora actual de la cita si existe
+      if (c) {
+        document.getElementById('reagendarFecha').value = (c.fecha_cita || '').substring(0, 10);
+        document.getElementById('reagendarHora').value = (c.hora_cita || '').substring(0, 5);
+      } else {
+        const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
+        document.getElementById('reagendarFecha').value = tomorrow.toISOString().substring(0, 10);
+        document.getElementById('reagendarHora').value = '10:00';
+      }
+      document.getElementById('reagendarModal').classList.add('open');
+      setTimeout(() => document.getElementById('reagendarFecha').focus(), 100);
+    };
+
+    document.getElementById('reagendarCancel').addEventListener('click', () => {
+      document.getElementById('reagendarModal').classList.remove('open');
+    });
+    document.getElementById('reagendarForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const id = document.getElementById('reagendarCitaId').value;
+      const fecha = document.getElementById('reagendarFecha').value;
+      const hora = document.getElementById('reagendarHora').value;
+      if (!fecha || !hora) return;
+      const btn = document.getElementById('reagendarSubmit');
+      btn.disabled = true; btn.textContent = 'Reagendando…';
+      try {
+        await apiPost(`/api/tenant/citas/${id}/reagendar?t=${encodeURIComponent(SLUG)}`, { fecha, hora });
+        document.getElementById('reagendarModal').classList.remove('open');
+        toast('success', 'Cita reagendada', `Nueva fecha: ${fecha} ${hora}. Cliente notificado.`);
+        await loadCitas();
+        await loadCalCitas();
+        await loadDashboard();
+      } catch (err) {
+        toast('error', 'Error al reagendar', err.message);
+      } finally {
+        btn.disabled = false; btn.textContent = 'Reagendar';
+      }
+    });
+
+    // ===== MEJORA 9: Exportar CSV =====
+    document.getElementById('exportCsvBtn').addEventListener('click', () => {
+      const csvUrl = `${WORKER_URL}/api/tenant/citas/export?t=${encodeURIComponent(SLUG)}`;
+      // Crear link temporal para forzar la descarga
+      const a = document.createElement('a');
+      a.href = csvUrl;
+      a.download = `citas-${SLUG}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      toast('success', 'Descargando CSV', 'Se está descargando el archivo con todas las citas.');
+    });
+
+    // ===== MEJORA 8: Estadísticas =====
+    let statsLoaded = false;
+    async function loadStats() {
+      const container = document.getElementById('statsContainer');
+      container.innerHTML = '<div class="stats-empty"><span class="emoji">⏳</span>Cargando estadísticas…</div>';
+      try {
+        const data = await apiGet(`/api/tenant/stats?t=${encodeURIComponent(SLUG)}`);
+        renderStats(data);
+        statsLoaded = true;
+      } catch (err) {
+        container.innerHTML = `<div class="stats-empty"><span class="emoji">⚠️</span>Error al cargar estadísticas: ${escapeHtml(err.message)}</div>`;
+      }
+    }
+
+    function renderStats(data) {
+      const container = document.getElementById('statsContainer');
+      if (!data || !data.success) {
+        container.innerHTML = '<div class="stats-empty"><span class="emoji">⚠️</span>No se pudieron cargar las estadísticas.</div>';
+        return;
+      }
+      const porDia = data.por_dia || [];
+      const porServicio = data.por_servicio || [];
+      const porEstado = data.por_estado || [];
+      const conv = data.conversaciones || {};
+      const rango = data.rango || {};
+
+      // Bar chart vertical: citas por día (últimos 7 días)
+      const maxDia = Math.max(1, ...porDia.map(d => d.total || 0));
+      const diaLabels = porDia.map(d => {
+        const dt = new Date(d.fecha + 'T12:00:00');
+        const day = dt.getDate();
+        const mes = dt.getMonth() + 1;
+        return `${day}/${mes}`;
+      });
+      const diaBars = porDia.map((d, i) => {
+        const pct = Math.round(((d.total || 0) / maxDia) * 100);
+        return `
+          <div class="bar-col">
+            <div class="bar-value">${d.total || 0}</div>
+            <div class="bar-fill" style="height: ${Math.max(2, pct)}%;"></div>
+            <div class="bar-label">${diaLabels[i]}</div>
+          </div>`;
+      }).join('');
+
+      // Bar chart horizontal: top 5 servicios
+      const maxServ = Math.max(1, ...porServicio.map(s => s.total || 0));
+      const servBars = porServicio.length ? porServicio.map(s => {
+        const pct = Math.round(((s.total || 0) / maxServ) * 100);
+        return `
+          <div class="hbar-row">
+            <div class="hbar-label" title="${escapeHtml(s.servicio || '')}">${escapeHtml(s.servicio || '—')}</div>
+            <div class="hbar-track"><div class="hbar-fill" style="width: ${pct}%;"></div></div>
+            <div class="hbar-value">${s.total || 0}</div>
+          </div>`;
+      }).join('') : '<div class="stats-sub">Sin datos suficientes.</div>';
+
+      // Pie chart: estados (aprobada, pendiente, rechazada)
+      const estadoColors = { aprobada: '#22c55e', pendiente: '#fbbf24', rechazada: '#ef4444', cancelada: '#6b7280' };
+      const estadoLabels = { aprobada: 'Aprobadas', pendiente: 'Pendientes', rechazada: 'Rechazadas', cancelada: 'Canceladas' };
+      const totalEstado = porEstado.reduce((a, e) => a + (e.total || 0), 0);
+      let pieSlices = '';
+      let pieLegend = '';
+      if (totalEstado > 0) {
+        let acc = 0;
+        const cx = 80, cy = 80, r = 70;
+        for (const e of porEstado) {
+          if (!e.total) continue;
+          const val = e.total;
+          const startAngle = (acc / totalEstado) * 2 * Math.PI - Math.PI / 2;
+          acc += val;
+          const endAngle = (acc / totalEstado) * 2 * Math.PI - Math.PI / 2;
+          const x1 = cx + r * Math.cos(startAngle);
+          const y1 = cy + r * Math.sin(startAngle);
+          const x2 = cx + r * Math.cos(endAngle);
+          const y2 = cy + r * Math.sin(endAngle);
+          const largeArc = (endAngle - startAngle) > Math.PI ? 1 : 0;
+          const color = estadoColors[e.estado] || '#999';
+          const label = estadoLabels[e.estado] || e.estado;
+          // Si es 100%, dibujar círculo completo
+          if (val === totalEstado) {
+            pieSlices += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${color}"/>`;
+          } else {
+            pieSlices += `<path d="M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${largeArc} 1 ${x2} ${y2} Z" fill="${color}"/>`;
+          }
+          pieLegend += `<div class="pl-row"><span class="pl-swatch" style="background:${color}"></span>${escapeHtml(label)}: <strong>${val}</strong> (${Math.round(val / totalEstado * 100)}%)</div>`;
+        }
+      } else {
+        pieSlices = `<circle cx="80" cy="80" r="70" fill="#2a2a2a"/>`;
+        pieLegend = '<div class="pl-row"><span class="pl-swatch" style="background:#2a2a2a"></span>Sin datos</div>';
+      }
+
+      container.innerHTML = `
+        <div class="stats-numbers" style="margin-bottom:24px;">
+          <div class="num-card"><div class="num-val">${conv.citas_total ?? 0}</div><div class="num-lbl">Citas totales</div></div>
+          <div class="num-card"><div class="num-val">${conv.telefonos_unicos ?? 0}</div><div class="num-lbl">Clientes únicos</div></div>
+          <div class="num-card"><div class="num-val">${conv.mensajes_total ?? 0}</div><div class="num-lbl">Mensajes WhatsApp</div></div>
+        </div>
+        <div class="stats-grid">
+          <div class="stats-card">
+            <h4>📅 Citas por día</h4>
+            <div class="stats-sub">Últimos 7 días (${escapeHtml(rango.inicio || '')} a ${escapeHtml(rango.fin || '')})</div>
+            <div class="bar-chart-v">${diaBars}</div>
+          </div>
+          <div class="stats-card">
+            <h4>🔧 Top 5 servicios</h4>
+            <div class="stats-sub">Citas por servicio (histórico)</div>
+            <div class="bar-chart-h">${servBars}</div>
+          </div>
+          <div class="stats-card">
+            <h4>🥧 Tasa de aprobación</h4>
+            <div class="stats-sub">Distribución por estado</div>
+            <div class="pie-wrap">
+              <svg viewBox="0 0 160 160" xmlns="http://www.w3.org/2000/svg">${pieSlices}</svg>
+              <div class="pie-legend">${pieLegend}</div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    document.getElementById('refreshStatsBtn').addEventListener('click', () => loadStats());
 
     // Filters
     document.querySelectorAll('.filters-bar .filter-pill').forEach(p => {
@@ -1211,6 +1522,7 @@
         if (tab === 'servicios' && !serviciosList.length) loadServicios();
         if (tab === 'citas') loadCitas();
         if (tab === 'agenda') renderCalendar();
+        if (tab === 'stats') loadStats();
         if (tab === 'config') renderConfig();
       });
     });

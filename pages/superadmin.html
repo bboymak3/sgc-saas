@@ -424,6 +424,7 @@
         <div class="header-actions">
           <span class="refresh-pill"><span class="dot"></span>Auto-refresh 60s</span>
           <button class="btn-refresh" onclick="loadTenants()" title="Recargar ahora">↻ Refrescar</button>
+          <button class="btn-refresh" onclick="openTemplatesModal()" title="Plantillas de prompt por categoría">📋 Plantillas</button>
           <button class="btn-logout" onclick="logout()">Cerrar sesión</button>
         </div>
       </div>
@@ -571,6 +572,45 @@
     </div>
   </div>
 
+  <!-- ===== TEMPLATES MODAL (MEJORA 14) ===== -->
+  <div class="modal-overlay" id="templatesModal">
+    <div class="modal wide">
+      <div class="modal-head">
+        <div>
+          <h3>📋 Plantillas de prompt por categoría</h3>
+          <div class="sub">Edita el prompt default que se aplica a los negocios de cada rubro. Usa <code>{business_name}</code> y <code>{servicios}</code> como variables.</div>
+        </div>
+        <button class="modal-close" onclick="closeModal('templatesModal')">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-grid-2" style="margin-bottom:14px;">
+          <div>
+            <label for="tplCategoria" style="color:var(--text-muted);font-size:0.85rem;display:block;margin-bottom:6px;">Categoría (78 rubros)</label>
+            <select id="tplCategoria" onchange="onTemplateCategoriaChange()" style="width:100%;background:var(--bg-2);border:1px solid var(--border-light);color:#fff;padding:10px;border-radius:10px;">
+              <option value="">— Selecciona una categoría —</option>
+            </select>
+          </div>
+          <div>
+            <label style="color:var(--text-muted);font-size:0.85rem;display:block;margin-bottom:6px;">Estado</label>
+            <div id="tplEstado" style="background:var(--bg-2);border:1px solid var(--border);padding:10px;border-radius:10px;font-size:0.85rem;color:var(--text-muted);">—</div>
+          </div>
+        </div>
+        <div style="margin-bottom:10px;">
+          <label for="tplPrompt" style="color:var(--text-muted);font-size:0.85rem;display:block;margin-bottom:6px;">Prompt de la plantilla</label>
+          <textarea id="tplPrompt" rows="14" placeholder="Selecciona una categoría para cargar o generar el prompt…" style="width:100%;background:var(--bg-2);border:1px solid var(--border-light);color:#fff;padding:12px;border-radius:10px;font-family:monospace;font-size:0.82rem;line-height:1.5;resize:vertical;"></textarea>
+        </div>
+        <div id="tplError" class="login-error" style="margin-top:8px;"></div>
+      </div>
+      <div class="modal-foot" style="flex-wrap:wrap;gap:8px;">
+        <button class="btn" onclick="closeModal('templatesModal')">Cerrar</button>
+        <button class="btn danger" id="tplDeleteBtn" onclick="deleteTemplate()" disabled>🗑 Eliminar</button>
+        <span style="flex:1;"></span>
+        <button class="btn warn" id="tplApplyBtn" onclick="applyTemplateToTenants()" disabled>⚡ Aplicar a todos los negocios de esta categoría</button>
+        <button class="btn primary" id="tplSaveBtn" onclick="saveTemplate()" disabled>💾 Guardar plantilla</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ===== TOAST ===== -->
   <div id="toast" class="toast hidden"></div>
 
@@ -676,6 +716,200 @@
         headers: { 'X-Admin-Password': ADMIN_PWD }
       });
       return res.json();
+    }
+    async function apiPut(path, body) {
+      const res = await fetch(`${API_BASE}${path}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'X-Admin-Password': ADMIN_PWD },
+        body: JSON.stringify(body || {})
+      });
+      return res.json();
+    }
+
+    // ============================================================
+    // MEJORA 14: PLANTILLAS DE PROMPT POR CATEGORÍA
+    // ============================================================
+    const AUNCLICK_CATEGORIAS = [
+      { tipo: "Agropecuarios", categorias: ["Insumos Agropecuarios", "Agricolas", "Maquinaria Agricola"] },
+      { tipo: "Automotriz", categorias: ["Auto Talleres", "Auto Repuestos", "Auto Lavado", "Concesionarios", "Motos"] },
+      { tipo: "Belleza y Cuidado Personal", categorias: ["Ropas", "Zapaterias", "Joyerias"] },
+      { tipo: "Comida y Bebidas", categorias: ["Restaurantes", "Bares y Discotecas", "Cafeterias", "Panaderias", "Supermercados", "Fruver", "Heladerias"] },
+      { tipo: "Educacion", categorias: ["Academias", "Colegios", "Librerias", "Universidades"] },
+      { tipo: "Hogar y Construccion", categorias: ["Ferreterias", "Mueblerias", "Electrodomesticos", "Pinturas", "Cerrajerias", "Electricos"] },
+      { tipo: "Salud y Bienestar", categorias: ["Farmacias", "Clinicas y Hospitales", "Laboratorios", "Opticas", "Veterinarias", "Gimnasios", "Dentistas", "Naturistas"] },
+      { tipo: "Servicios Profesionales", categorias: ["Inmobiliarias", "Bufete de Abogados", "Juridicos", "Publicidad", "Fotografia", "Imprenta", "Tecnologia", "Seguridad"] },
+      { tipo: "Servicios Varios", categorias: ["General", "Pizzerias", "Perfumerias", "Barberias", "Salon y Spa", "Transportes", "Variedades", "Domicilios", "Sublimacion", "Lavanderias", "Desechables", "Bicicletas", "Cámaras de Seguridad", "COLCHONES", "Carniceria", "Charcuteria", "Cocinas y Accesorios", "Confiteria", "Decoración", "Energeticos", "Lubricantes", "Maquinaria", "Medicina Servicio Medico", "Otro", "Peluqueria", "Potabilizadora de Agua", "Ropa Infantil", "Suplementos"] },
+      { tipo: "Tiendas y Comercio", categorias: ["Celulares", "Entretenimiento y recreación"] },
+      { tipo: "Turismo y Hospedaje", categorias: ["Hoteles y Posadas", "Agencias de Viaje", "Artesanias", "Encomiendas"] }
+    ];
+    let templatesModalInitialized = false;
+    let currentTemplateData = null;
+
+    async function openTemplatesModal() {
+      openModal('templatesModal');
+      // Reset state
+      document.getElementById('tplEstado').textContent = '—';
+      document.getElementById('tplPrompt').value = '';
+      document.getElementById('tplPrompt').placeholder = 'Selecciona una categoría para cargar o generar el prompt…';
+      document.getElementById('tplSaveBtn').disabled = true;
+      document.getElementById('tplApplyBtn').disabled = true;
+      document.getElementById('tplDeleteBtn').disabled = true;
+      document.getElementById('tplError').classList.remove('show');
+      currentTemplateData = null;
+      // Llenar dropdown solo la primera vez
+      if (!templatesModalInitialized) {
+        const select = document.getElementById('tplCategoria');
+        let html = '<option value="">— Selecciona una categoría —</option>';
+        for (const grupo of AUNCLICK_CATEGORIAS) {
+          html += `<optgroup label="${escapeAttr(grupo.tipo)}">`;
+          for (const cat of grupo.categorias) {
+            html += `<option value="${escapeAttr(cat)}">${escapeHtml(cat)}</option>`;
+          }
+          html += '</optgroup>';
+        }
+        select.innerHTML = html;
+        templatesModalInitialized = true;
+      }
+      // Pre-seleccionar primera categoría automáticamente
+      document.getElementById('tplCategoria').selectedIndex = 0;
+    }
+
+    async function onTemplateCategoriaChange() {
+      const cat = document.getElementById('tplCategoria').value;
+      const promptEl = document.getElementById('tplPrompt');
+      const estadoEl = document.getElementById('tplEstado');
+      const saveBtn = document.getElementById('tplSaveBtn');
+      const applyBtn = document.getElementById('tplApplyBtn');
+      const delBtn = document.getElementById('tplDeleteBtn');
+      const errBox = document.getElementById('tplError');
+      errBox.classList.remove('show');
+      if (!cat) {
+        promptEl.value = '';
+        estadoEl.textContent = '—';
+        saveBtn.disabled = true;
+        applyBtn.disabled = true;
+        delBtn.disabled = true;
+        currentTemplateData = null;
+        return;
+      }
+      estadoEl.textContent = 'Cargando…';
+      promptEl.value = '';
+      saveBtn.disabled = true;
+      applyBtn.disabled = true;
+      delBtn.disabled = true;
+      try {
+        const data = await apiGet(`/api/superadmin/templates/${encodeURIComponent(cat)}`);
+        if (!data.success) {
+          errBox.textContent = '❌ ' + (data.error || 'Error al cargar plantilla');
+          errBox.classList.add('show');
+          estadoEl.textContent = 'Error';
+          return;
+        }
+        currentTemplateData = data;
+        promptEl.value = data.prompt || '';
+        const isDefault = data.is_default;
+        const tenantsConRubro = data.tenants_con_rubro ?? 0;
+        estadoEl.innerHTML = `${isDefault ? '<span style="color:var(--warn)">⚠ Plantilla default autogenerada</span>' : '<span style="color:var(--primary)">✓ Plantilla personalizada guardada</span>'}<br><span style="color:var(--text-dim);font-size:0.78rem;">${tenantsConRubro} negocio(s) con este rubro</span>`;
+        saveBtn.disabled = false;
+        applyBtn.disabled = false;
+        delBtn.disabled = isDefault;
+      } catch (err) {
+        errBox.textContent = '❌ Error: ' + err.message;
+        errBox.classList.add('show');
+        estadoEl.textContent = 'Error';
+      }
+    }
+
+    async function saveTemplate() {
+      const cat = document.getElementById('tplCategoria').value;
+      const prompt = document.getElementById('tplPrompt').value.trim();
+      const errBox = document.getElementById('tplError');
+      const btn = document.getElementById('tplSaveBtn');
+      errBox.classList.remove('show');
+      if (!cat) return;
+      if (!prompt) {
+        errBox.textContent = '❌ El prompt no puede estar vacío';
+        errBox.classList.add('show');
+        return;
+      }
+      btn.disabled = true; btn.textContent = 'Guardando…';
+      try {
+        const data = await apiPut(`/api/superadmin/templates/${encodeURIComponent(cat)}`, { prompt });
+        if (data.success) {
+          showToast('success', `✅ Plantilla guardada para "${cat}"`);
+          // Refrescar estado
+          await onTemplateCategoriaChange();
+        } else {
+          errBox.textContent = '❌ ' + (data.error || 'Error al guardar');
+          errBox.classList.add('show');
+        }
+      } catch (err) {
+        errBox.textContent = '❌ Error: ' + err.message;
+        errBox.classList.add('show');
+      } finally {
+        btn.disabled = false; btn.textContent = '💾 Guardar plantilla';
+      }
+    }
+
+    async function deleteTemplate() {
+      const cat = document.getElementById('tplCategoria').value;
+      if (!cat) return;
+      if (!confirm(`¿Eliminar la plantilla de "${cat}"?\n\nSe volverá a usar el prompt default autogenerado.`)) return;
+      const errBox = document.getElementById('tplError');
+      const btn = document.getElementById('tplDeleteBtn');
+      btn.disabled = true; btn.textContent = 'Eliminando…';
+      try {
+        const data = await apiDelete(`/api/superadmin/templates/${encodeURIComponent(cat)}`);
+        if (data.success) {
+          showToast('success', `🗑 Plantilla eliminada para "${cat}"`);
+          await onTemplateCategoriaChange();
+        } else {
+          errBox.textContent = '❌ ' + (data.error || 'Error al eliminar');
+          errBox.classList.add('show');
+        }
+      } catch (err) {
+        errBox.textContent = '❌ Error: ' + err.message;
+        errBox.classList.add('show');
+      } finally {
+        btn.disabled = false; btn.textContent = '🗑 Eliminar';
+      }
+    }
+
+    async function applyTemplateToTenants() {
+      const cat = document.getElementById('tplCategoria').value;
+      if (!cat) return;
+      const tenantsCount = currentTemplateData?.tenants_con_rubro ?? 0;
+      if (tenantsCount === 0) {
+        if (!confirm(`No hay negocios con el rubro "${cat}".\n\n¿Quieres guardar la plantilla de todos modos para uso futuro?`)) return;
+        // Solo guardar si no está guardada ya
+        await saveTemplate();
+        return;
+      }
+      if (!confirm(`¿Aplicar la plantilla de "${cat}" a los ${tenantsCount} negocio(s) con este rubro?\n\nEsto sobreescribirá el prompt personalizado de cada negocio. Los negocios que ya tengan un prompt custom lo perderán.`)) return;
+      const errBox = document.getElementById('tplError');
+      const btn = document.getElementById('tplApplyBtn');
+      btn.disabled = true; btn.textContent = 'Aplicando…';
+      try {
+        // Asegurar que la plantilla esté guardada primero
+        await saveTemplate();
+        const data = await apiPost(`/api/superadmin/templates/${encodeURIComponent(cat)}/apply`, {});
+        if (data.success) {
+          showToast('success', `✅ Aplicada a ${data.tenants_actualizados}/${data.tenants_encontrados} negocio(s)`);
+          if (data.detalles && data.detalles.some(d => !d.ok)) {
+            const failed = data.detalles.filter(d => !d.ok);
+            errBox.innerHTML = `⚠️ ${failed.length} negocio(s) no se pudieron actualizar:<br>${failed.map(d => '• ' + escapeHtml(d.slug) + ': ' + escapeHtml(d.error || '')).join('<br>')}`;
+            errBox.classList.add('show');
+          }
+        } else {
+          errBox.textContent = '❌ ' + (data.error || 'Error al aplicar');
+          errBox.classList.add('show');
+        }
+      } catch (err) {
+        errBox.textContent = '❌ Error: ' + err.message;
+        errBox.classList.add('show');
+      } finally {
+        btn.disabled = false; btn.textContent = '⚡ Aplicar a todos los negocios de esta categoría';
+      }
     }
 
     // ============================================================

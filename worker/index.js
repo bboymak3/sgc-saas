@@ -1546,6 +1546,10 @@ var index_default = {
         await env2.DB.prepare(
           "UPDATE sgc_cit_Citas SET orden_enviada = ?, numero_orden_sgc = ?, updated_at = datetime('now') WHERE id = ?"
         ).bind(ordenResult.success ? 1 : 0, numOrden, citaId).run();
+        // MEJORA 6: Notificar al dueño del negocio de la nueva cita (chat web)
+        notifyOwnerNewCita(env2, tenantIdAg, cita, "chat-web").catch((e) => {
+          console.error("MEJORA 6 notifyOwnerNewCita (chat-web):", e);
+        });
         return new Response(JSON.stringify({
           success: true,
           mensaje: ordenResult.success ? "Cita agendada y orden creada exitosamente" : "Cita agendada (la orden se enviar\xE1 en breve)",
@@ -2163,6 +2167,209 @@ Lamentamos las molestias. Para m\xE1s informaci\xF3n o reagendar, contacte direc
         }
       }
 
+      // ============================================================
+      // MEJORA 7: Cancelar y Reagendar citas desde el panel admin
+      // ============================================================
+      const tenantCitaCancelarMatch = path.match(/^\/api\/tenant\/citas\/(\d+)\/cancelar$/);
+      if (tenantCitaCancelarMatch && request.method === "POST") {
+        const citaId = parseInt(tenantCitaCancelarMatch[1]);
+        const { tenant, error, status } = await resolveTenantForAdminPanel(env2, url);
+        if (error) {
+          return new Response(JSON.stringify({ success: false, error }), {
+            status, headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
+          });
+        }
+        const tid = tenant.id;
+        const cita = await env2.DB.prepare("SELECT * FROM sgc_cit_Citas WHERE id = ? AND tenant_id = ?").bind(citaId, tid).first();
+        if (!cita) {
+          return new Response(JSON.stringify({ success: false, error: "Cita no encontrada en este tenant" }), {
+            status: 404, headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
+          });
+        }
+        await env2.DB.prepare(
+          "UPDATE sgc_cit_Citas SET estado = 'cancelada', estado_aprobacion = 'cancelada', updated_at = datetime('now') WHERE id = ? AND tenant_id = ?"
+        ).bind(citaId, tid).run();
+        // Notificar al cliente por WhatsApp
+        if (cita.telefono) {
+          try {
+            await enviarWhatsAppEvolution(env2, cita.telefono,
+              `\u274C *Tu cita fue cancelada*\n\n\u{1F527} Servicio: ${cita.servicio}\n\u{1F4C5} Fecha: ${cita.fecha_cita}\n\u23f0 Hora: ${cita.hora_cita}\n\nSi quieres reagendar, escr\u00edbenos directamente.\n\u2014 *${tenant.business_name}*`);
+          } catch (e) {
+            console.error("MEJORA 7 notificar cancelacion cliente:", e);
+          }
+        }
+        return new Response(JSON.stringify({ success: true, mensaje: "Cita cancelada y cliente notificado" }), {
+          headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
+        });
+      }
+
+      const tenantCitaReagendarMatch = path.match(/^\/api\/tenant\/citas\/(\d+)\/reagendar$/);
+      if (tenantCitaReagendarMatch && request.method === "POST") {
+        const citaId = parseInt(tenantCitaReagendarMatch[1]);
+        const { tenant, error, status } = await resolveTenantForAdminPanel(env2, url);
+        if (error) {
+          return new Response(JSON.stringify({ success: false, error }), {
+            status, headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
+          });
+        }
+        const tid = tenant.id;
+        const cita = await env2.DB.prepare("SELECT * FROM sgc_cit_Citas WHERE id = ? AND tenant_id = ?").bind(citaId, tid).first();
+        if (!cita) {
+          return new Response(JSON.stringify({ success: false, error: "Cita no encontrada en este tenant" }), {
+            status: 404, headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
+          });
+        }
+        const body = await request.json().catch(() => ({}));
+        const nuevaFecha = (body.fecha || "").trim();
+        const nuevaHora = (body.hora || "").trim();
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(nuevaFecha)) {
+          return new Response(JSON.stringify({ success: false, error: "fecha inv\u00e1lida (YYYY-MM-DD)" }), {
+            status: 400, headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
+          });
+        }
+        if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(nuevaHora)) {
+          return new Response(JSON.stringify({ success: false, error: "hora inv\u00e1lida (HH:MM 24h)" }), {
+            status: 400, headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
+          });
+        }
+        await env2.DB.prepare(
+          "UPDATE sgc_cit_Citas SET fecha_cita = ?, hora_cita = ?, estado_aprobacion = 'pendiente', estado = 'pendiente', motivo_rechazo = NULL, updated_at = datetime('now') WHERE id = ? AND tenant_id = ?"
+        ).bind(nuevaFecha, nuevaHora, citaId, tid).run();
+        // Notificar al cliente por WhatsApp
+        if (cita.telefono) {
+          try {
+            await enviarWhatsAppEvolution(env2, cita.telefono,
+              `\u{1F4C5} *Tu cita fue reagendada*\n\n\u{1F527} Servicio: ${cita.servicio}\n\u{1F4C5} Nueva fecha: ${nuevaFecha}\n\u23f0 Nueva hora: ${nuevaHora}\n\nTe confirmamos en breve.\n\u2014 *${tenant.business_name}*`);
+          } catch (e) {
+            console.error("MEJORA 7 notificar reagendado cliente:", e);
+          }
+        }
+        return new Response(JSON.stringify({ success: true, mensaje: "Cita reagendada y cliente notificado", nueva_fecha: nuevaFecha, nueva_hora: nuevaHora }), {
+          headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
+        });
+      }
+
+      // ============================================================
+      // MEJORA 9: Exportar citas a CSV
+      // ============================================================
+      if (path === "/api/tenant/citas/export" && request.method === "GET") {
+        const { tenant, error, status } = await resolveTenantForAdminPanel(env2, url);
+        if (error) {
+          return new Response(JSON.stringify({ success: false, error }), {
+            status, headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
+          });
+        }
+        const tid = tenant.id;
+        const result = await env2.DB.prepare(
+          "SELECT id, fecha_cita, hora_cita, servicio, nombre_cliente, telefono, patente, marca, modelo, estado, estado_aprobacion, canal, created_at FROM sgc_cit_Citas WHERE tenant_id = ? ORDER BY created_at DESC LIMIT 5000"
+        ).bind(tid).all();
+        const rows = result.results || [];
+        const esc = (v) => {
+          if (v === null || v === undefined) return "";
+          const s = String(v);
+          if (/[",\n\r]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+          return s;
+        };
+        const header = ["ID","Fecha","Hora","Servicio","Cliente","Tel\u00e9fono","Patente","Estado","Aprobaci\u00f3n","Canal","Creada"];
+        const lines = [header.join(",")];
+        for (const r of rows) {
+          lines.push([
+            esc(r.id),
+            esc(r.fecha_cita),
+            esc(r.hora_cita),
+            esc(r.servicio),
+            esc(r.nombre_cliente),
+            esc(r.telefono),
+            esc(r.patente),
+            esc(r.estado),
+            esc(r.estado_aprobacion),
+            esc(r.canal),
+            esc(r.created_at)
+          ].join(","));
+        }
+        const csv = lines.join("\r\n");
+        return new Response(csv, {
+          status: 200,
+          headers: {
+            ...CORS_HEADERS,
+            "Content-Type": "text/csv; charset=utf-8",
+            "Content-Disposition": `attachment; filename="citas-${tenant.slug}.csv"`
+          }
+        });
+      }
+
+      // ============================================================
+      // MEJORA 8: Estadísticas para el panel admin (datos agregados)
+      // ============================================================
+      if (path === "/api/tenant/stats" && request.method === "GET") {
+        const { tenant, error, status } = await resolveTenantForAdminPanel(env2, url);
+        if (error) {
+          return new Response(JSON.stringify({ success: false, error }), {
+            status, headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
+          });
+        }
+        const tid = tenant.id;
+        // Calcular fecha hace 7 días en zona Chile usando Intl.DateTimeFormat (más confiable)
+        const tzChile = "America/Santiago";
+        const fmtYMD = new Intl.DateTimeFormat("en-CA", { timeZone: tzChile, year: "numeric", month: "2-digit", day: "2-digit" });
+        const hoyParts = fmtYMD.formatToParts(new Date());
+        const hoyY = hoyParts.find(p => p.type === "year").value;
+        const hoyM = hoyParts.find(p => p.type === "month").value;
+        const hoyD = hoyParts.find(p => p.type === "day").value;
+        const hoy = `${hoyY}-${hoyM}-${hoyD}`;
+        // Hace 6 días (7 días incluyendo hoy)
+        const hace7Date = new Date();
+        hace7Date.setUTCDate(hace7Date.getUTCDate() - 6);
+        const hace7Parts = fmtYMD.formatToParts(hace7Date);
+        const hace7Y = hace7Parts.find(p => p.type === "year").value;
+        const hace7M = hace7Parts.find(p => p.type === "month").value;
+        const hace7D = hace7Parts.find(p => p.type === "day").value;
+        const hace7Str = `${hace7Y}-${hace7M}-${hace7D}`;
+
+        const [porDia, porServicio, porEstado, convStats, msgsStats] = await Promise.all([
+          env2.DB.prepare(
+            "SELECT fecha_cita as fecha, COUNT(*) as total FROM sgc_cit_Citas WHERE tenant_id = ? AND fecha_cita >= ? AND fecha_cita <= ? GROUP BY fecha_cita ORDER BY fecha_cita ASC"
+          ).bind(tid, hace7Str, hoy).all(),
+          env2.DB.prepare(
+            "SELECT servicio, COUNT(*) as total FROM sgc_cit_Citas WHERE tenant_id = ? GROUP BY servicio ORDER BY total DESC LIMIT 5"
+          ).bind(tid).all(),
+          env2.DB.prepare(
+            "SELECT COALESCE(NULLIF(estado_aprobacion, ''), 'pendiente') as estado, COUNT(*) as total FROM sgc_cit_Citas WHERE tenant_id = ? GROUP BY estado ORDER BY total DESC"
+          ).bind(tid).all(),
+          env2.DB.prepare(
+            "SELECT COUNT(*) as total, COUNT(DISTINCT telefono) as unicos FROM sgc_cit_Citas WHERE tenant_id = ?"
+          ).bind(tid).first(),
+          env2.DB.prepare(
+            "SELECT COUNT(*) as total FROM sgc_cit_WhatsApp_messages WHERE conversation_id IN (SELECT id FROM sgc_cit_WhatsApp_conversations WHERE tenant_id = ?)"
+          ).bind(tid).first()
+        ]);
+
+        // Llenar los 7 días (incluir días con 0 citas) — basado en fechas en tz Chile
+        const diasArr = [];
+        for (let i = 6; i >= 0; i--) {
+          const d = new Date();
+          d.setUTCDate(d.getUTCDate() - i);
+          const parts = fmtYMD.formatToParts(d);
+          const ds = `${parts.find(p => p.type === "year").value}-${parts.find(p => p.type === "month").value}-${parts.find(p => p.type === "day").value}`;
+          const found = (porDia.results || []).find((x) => x.fecha === ds);
+          diasArr.push({ fecha: ds, total: found ? found.total : 0 });
+        }
+
+        return new Response(JSON.stringify({
+          success: true,
+          tenant: { slug: tenant.slug, business_name: tenant.business_name, rubro: tenant.rubro },
+          rango: { inicio: hace7Str, fin: hoy },
+          por_dia: diasArr,
+          por_servicio: porServicio.results || [],
+          por_estado: porEstado.results || [],
+          conversaciones: {
+            citas_total: convStats?.total || 0,
+            telefonos_unicos: convStats?.unicos || 0,
+            mensajes_total: msgsStats?.total || 0
+          }
+        }), { headers: { ...CORS_HEADERS, "Content-Type": "application/json" } });
+      }
+
       if (path === "/api/tenant/servicios" && request.method === "GET") {
         const { tenant, error, status } = await resolveTenantForAdminPanel(env2, url);
         if (error) {
@@ -2458,13 +2665,22 @@ Lamentamos las molestias. Para m\xE1s informaci\xF3n o reagendar, contacte direc
           console.error("Error cargando servicios default:", e);
         }
 
+        // MEJORA 14 (parte 6): Aplicar plantilla de prompt si existe para el rubro
+        let templateApplied = null;
+        try {
+          templateApplied = await applyTemplateOnApprove(env2, tenant.id, tenant.rubro || "otro");
+        } catch (e) {
+          console.error("Error aplicando plantilla on approve:", e);
+        }
+
         return superAdminJson({
           success: true,
           instance: instanceName,
           instance_created: instanceCreated,
           instance_error: instanceError,
           qr: qrBase64 ? `data:image/png;base64,${qrBase64}` : null,
-          qr_url: `${env2.EVOLUTION_API_URL}/instance/connect/${instanceName}`
+          qr_url: `${env2.EVOLUTION_API_URL}/instance/connect/${instanceName}`,
+          template_applied: templateApplied
         });
       }
 
@@ -2584,6 +2800,152 @@ Lamentamos las molestias. Para m\xE1s informaci\xF3n o reagendar, contacte direc
         }
 
         return superAdminJson({ success: true, message: "Prompt actualizado correctamente" });
+      }
+
+      // ============================================================
+      // MEJORA 14: PLANTILLAS DE PROMPT POR CATEGORÍA DE NEGOCIO
+      // Almacenadas en sgc_cit_config con tenant_id=0 y clave='prompt_template_<slug>'
+      // ============================================================
+
+      // GET /api/superadmin/templates — lista todas las plantillas guardadas
+      if (path === "/api/superadmin/templates" && request.method === "GET") {
+        if (!superAdminCheckAuth(request, url)) return superAdminUnauthorized();
+        const result = await env2.DB.prepare(
+          "SELECT clave, valor FROM sgc_cit_config WHERE tenant_id = 0 AND clave LIKE 'prompt\\_template\\_%' ESCAPE '\\'"
+        ).all();
+        const rows = result.results || [];
+        const templates = rows.map((r) => {
+          const categoria = r.clave.replace(/^prompt_template_/, "").replace(/_/g, " ");
+          let prompt = "";
+          try {
+            const parsed = JSON.parse(r.valor);
+            prompt = parsed.prompt || (typeof parsed === "string" ? parsed : "");
+          } catch (e) {
+            prompt = r.valor;
+          }
+          return { categoria, clave: r.clave, prompt };
+        });
+        return superAdminJson({ success: true, templates, total: templates.length });
+      }
+
+      // GET /api/superadmin/templates/<categoria> — obtiene una plantilla
+      const saTemplateGetMatch = path.match(/^\/api\/superadmin\/templates\/([^/]+)$/);
+      if (saTemplateGetMatch && request.method === "GET") {
+        if (!superAdminCheckAuth(request, url)) return superAdminUnauthorized();
+        const categoriaRaw = decodeURIComponent(saTemplateGetMatch[1]);
+        const slug = slugifyCategoria(categoriaRaw);
+        const clave = "prompt_template_" + slug;
+        const row = await env2.DB.prepare(
+          "SELECT valor FROM sgc_cit_config WHERE tenant_id = 0 AND clave = ?"
+        ).bind(clave).first();
+        let prompt = null;
+        if (row?.valor) {
+          try {
+            const parsed = JSON.parse(row.valor);
+            prompt = parsed.prompt || (typeof parsed === "string" ? parsed : "");
+          } catch (e) {
+            prompt = row.valor;
+          }
+        }
+        // Si no existe, generar default
+        const isDefault = !prompt;
+        if (isDefault) {
+          prompt = generateDefaultPromptForCategory(categoriaRaw);
+        }
+        // Contar tenants con este rubro (cualquier variante)
+        const tenantsCount = await countTenantsByCategoria(env2, categoriaRaw);
+        return superAdminJson({
+          success: true,
+          categoria: categoriaRaw,
+          slug,
+          clave,
+          prompt,
+          is_default: isDefault,
+          tenants_con_rubro: tenantsCount
+        });
+      }
+
+      // PUT /api/superadmin/templates/<categoria> — guarda o actualiza una plantilla
+      if (saTemplateGetMatch && request.method === "PUT") {
+        if (!superAdminCheckAuth(request, url)) return superAdminUnauthorized();
+        const categoriaRaw = decodeURIComponent(saTemplateGetMatch[1]);
+        const slug = slugifyCategoria(categoriaRaw);
+        const clave = "prompt_template_" + slug;
+        const body = await request.json().catch(() => ({}));
+        const prompt = (body.prompt || "").trim();
+        if (!prompt) {
+          return superAdminJson({ success: false, error: "El campo 'prompt' es requerido" }, 400);
+        }
+        const valor = JSON.stringify({ categoria: categoriaRaw, prompt, updated_at: new Date().toISOString() });
+        await env2.DB.prepare(
+          "INSERT INTO sgc_cit_config (tenant_id, clave, valor) VALUES (0, ?, ?) ON CONFLICT(tenant_id, clave) DO UPDATE SET valor = ?"
+        ).bind(clave, valor, valor).run();
+        return superAdminJson({ success: true, message: "Plantilla guardada", categoria: categoriaRaw, slug, clave });
+      }
+
+      // POST /api/superadmin/templates/<categoria>/apply — aplica a todos los tenants con ese rubro
+      const saTemplateApplyMatch = path.match(/^\/api\/superadmin\/templates\/([^/]+)\/apply$/);
+      if (saTemplateApplyMatch && request.method === "POST") {
+        if (!superAdminCheckAuth(request, url)) return superAdminUnauthorized();
+        const categoriaRaw = decodeURIComponent(saTemplateApplyMatch[1]);
+        const slug = slugifyCategoria(categoriaRaw);
+        const clave = "prompt_template_" + slug;
+        const row = await env2.DB.prepare(
+          "SELECT valor FROM sgc_cit_config WHERE tenant_id = 0 AND clave = ?"
+        ).bind(clave).first();
+        let prompt = null;
+        if (row?.valor) {
+          try {
+            const parsed = JSON.parse(row.valor);
+            prompt = parsed.prompt || (typeof parsed === "string" ? parsed : "");
+          } catch (e) {
+            prompt = row.valor;
+          }
+        }
+        if (!prompt) {
+          prompt = generateDefaultPromptForCategory(categoriaRaw);
+        }
+        // Buscar tenants cuyo rubro coincide con la categoría (cualquier variante)
+        const tenantsRes = await findTenantsByCategoria(env2, categoriaRaw);
+        let actualizados = 0;
+        const detalles = [];
+        for (const t of tenantsRes) {
+          try {
+            await env2.DB.prepare(
+              "INSERT INTO sgc_cit_config (tenant_id, clave, valor) VALUES (?, 'custom_prompt', ?) ON CONFLICT(tenant_id, clave) DO UPDATE SET valor = ?"
+            ).bind(t.id, prompt, prompt).run();
+            actualizados++;
+            detalles.push({ slug: t.slug, id: t.id, ok: true });
+          } catch (e) {
+            detalles.push({ slug: t.slug, id: t.id, ok: false, error: e.message });
+          }
+        }
+        return superAdminJson({
+          success: true,
+          categoria: categoriaRaw,
+          slug,
+          tenants_encontrados: tenantsRes.length,
+          tenants_actualizados: actualizados,
+          detalles
+        });
+      }
+
+      // DELETE /api/superadmin/templates/<categoria> — elimina una plantilla
+      if (saTemplateGetMatch && request.method === "DELETE") {
+        if (!superAdminCheckAuth(request, url)) return superAdminUnauthorized();
+        const categoriaRaw = decodeURIComponent(saTemplateGetMatch[1]);
+        const slug = slugifyCategoria(categoriaRaw);
+        const clave = "prompt_template_" + slug;
+        await env2.DB.prepare(
+          "DELETE FROM sgc_cit_config WHERE tenant_id = 0 AND clave = ?"
+        ).bind(clave).run();
+        return superAdminJson({ success: true, message: "Plantilla eliminada", categoria: categoriaRaw, slug });
+      }
+
+      // GET /api/superadmin/categorias — lista las 78 categorías de aunclick
+      if (path === "/api/superadmin/categorias" && request.method === "GET") {
+        if (!superAdminCheckAuth(request, url)) return superAdminUnauthorized();
+        return superAdminJson({ success: true, categorias: AUNCLICK_CATEGORIAS });
       }
 
       // === FIN SUPER ADMIN ENDPOINTS ===
@@ -3195,6 +3557,49 @@ async function enviarWhatsAppEvolution(env2, phone, text) {
 __name(enviarWhatsAppEvolution, "enviarWhatsAppEvolution");
 
 // ============================================================
+// MEJORA 6: Notificar al dueño del negocio cuando llega una cita nueva
+// Solo envía si el teléfono del cliente != teléfono del dueño
+// ============================================================
+async function notifyOwnerNewCita(env2, tenantId, cita, channel) {
+  try {
+    if (!tenantId || !cita) return { skipped: true, reason: "missing data" };
+    const tenant = await env2.DB.prepare(
+      "SELECT slug, business_name, whatsapp_number FROM tenants WHERE id = ?"
+    ).bind(tenantId).first();
+    if (!tenant) return { skipped: true, reason: "tenant not found" };
+    if (!tenant.whatsapp_number) return { skipped: true, reason: "owner has no whatsapp_number" };
+
+    const ownerPhone = String(tenant.whatsapp_number).replace(/[^0-9]/g, "");
+    const clientPhone = String(cita.telefono || "").replace(/[^0-9]/g, "");
+
+    // No notificar si el dueño es el mismo cliente
+    if (ownerPhone && clientPhone && ownerPhone === clientPhone) {
+      return { skipped: true, reason: "owner is the client" };
+    }
+
+    const fechaFmt = formatDateSpanish(cita.fecha_cita);
+    const canalLabel = channel || cita.canal || "web";
+    const msg =
+      `\u{1F514} *Nueva cita agendada*\n\n` +
+      `\u{1F4C5} Fecha: ${fechaFmt}\n` +
+      `\u23F0 Hora: ${cita.hora_cita}\n` +
+      `\u{1F527} Servicio: ${cita.servicio}\n` +
+      `\u{1F464} Cliente: ${cita.nombre_cliente || "(sin nombre)"}\n` +
+      `\u{1F4DE} Tel: ${cita.telefono || "(sin tel\u00e9fono)"}\n` +
+      `${cita.patente ? "\u{1F697} Patente: " + cita.patente + "\n" : ""}` +
+      `\u{1F4E8} Canal: ${canalLabel}\n\n` +
+      `Apru\u00e9bala desde tu panel: https://sgc-saas.pages.dev/admin?t=${tenant.slug}`;
+
+    const result = await enviarWhatsAppEvolution(env2, ownerPhone, msg);
+    return { skipped: false, sent: result.success, error: result.error || null };
+  } catch (error) {
+    console.error("Error en notifyOwnerNewCita:", error);
+    return { skipped: true, reason: "error: " + error.message };
+  }
+}
+__name(notifyOwnerNewCita, "notifyOwnerNewCita");
+
+// ============================================================
 // ENVIO DE IMAGEN POR WHATSAPP (Evolution API v2: sendMedia)
 // ============================================================
 async function enviarImagenWhatsAppEvolution(env2, instanceName, phone, base64, caption) {
@@ -3327,6 +3732,21 @@ async function executeWhatsAppTool(env2, toolName, params, conversation) {
       await env2.DB.prepare(
         "UPDATE sgc_cit_WhatsApp_conversations SET client_context = ? WHERE id = ?"
       ).bind(JSON.stringify(newCtx), conversation.id).run();
+      
+      // MEJORA 6: Notificar al dueño del negocio de la nueva cita (async, no bloquea)
+      const citaParaOwner = {
+        fecha_cita: params.fecha,
+        hora_cita: params.hora,
+        servicio: params.servicio,
+        nombre_cliente: conversation.contact_name || "",
+        telefono: conversation.phone,
+        patente: params.patente || null,
+        canal: "whatsapp"
+      };
+      // fire-and-forget: si falla, no afecta al agendamiento
+      notifyOwnerNewCita(env2, conversation.tenant_id || 1, citaParaOwner, "whatsapp").catch((e) => {
+        console.error("MEJORA 6 notifyOwnerNewCita (whatsapp):", e);
+      });
       
       return { success: true, cita_id: result.meta?.last_row_id, fecha: params.fecha, hora: params.hora };
     }
@@ -4268,6 +4688,188 @@ async function handleOwnerCommand(env2, body, tenant, phone) {
   }
 }
 __name(handleOwnerCommand, "handleOwnerCommand");
+
+// ============================================================
+// MEJORA 14: HELPERS — Plantillas de prompt por categoría
+// ============================================================
+
+// Las 78 categorías de aunclick.pages.dev agrupadas en 10 tipos
+var AUNCLICK_CATEGORIAS = [
+  { tipo: "Agropecuarios", categorias: ["Insumos Agropecuarios", "Agricolas", "Maquinaria Agricola"] },
+  { tipo: "Automotriz", categorias: ["Auto Talleres", "Auto Repuestos", "Auto Lavado", "Concesionarios", "Motos"] },
+  { tipo: "Belleza y Cuidado Personal", categorias: ["Ropas", "Zapaterias", "Joyerias"] },
+  { tipo: "Comida y Bebidas", categorias: ["Restaurantes", "Bares y Discotecas", "Cafeterias", "Panaderias", "Supermercados", "Fruver", "Heladerias"] },
+  { tipo: "Educacion", categorias: ["Academias", "Colegios", "Librerias", "Universidades"] },
+  { tipo: "Hogar y Construccion", categorias: ["Ferreterias", "Mueblerias", "Electrodomesticos", "Pinturas", "Cerrajerias", "Electricos"] },
+  { tipo: "Salud y Bienestar", categorias: ["Farmacias", "Clinicas y Hospitales", "Laboratorios", "Opticas", "Veterinarias", "Gimnasios", "Dentistas", "Naturistas"] },
+  { tipo: "Servicios Profesionales", categorias: ["Inmobiliarias", "Bufete de Abogados", "Juridicos", "Publicidad", "Fotografia", "Imprenta", "Tecnologia", "Seguridad"] },
+  { tipo: "Servicios Varios", categorias: ["General", "Pizzerias", "Perfumerias", "Barberias", "Salon y Spa", "Transportes", "Variedades", "Domicilios", "Sublimacion", "Lavanderias", "Desechables", "Bicicletas", "Cámaras de Seguridad", "COLCHONES", "Carniceria", "Charcuteria", "Cocinas y Accesorios", "Confiteria", "Decoración", "Energeticos", "Lubricantes", "Maquinaria", "Medicina Servicio Medico", "Otro", "Peluqueria", "Potabilizadora de Agua", "Ropa Infantil", "Suplementos"] },
+  { tipo: "Tiendas y Comercio", categorias: ["Celulares", "Entretenimiento y recreación"] },
+  { tipo: "Turismo y Hospedaje", categorias: ["Hoteles y Posadas", "Agencias de Viaje", "Artesanias", "Encomiendas"] }
+];
+
+// Mapa de aliases: mapea categorías aunclick a los rubros legacy usados por los tenants existentes
+// (taller, barberia, clinica_dental, salon_belleza, veterinaria, spa, fotografia, otro)
+var CATEGORIA_TO_LEGACY_RUBRO = {
+  "auto talleres": "taller",
+  "barberias": "barberia",
+  "dentistas": "clinica_dental",
+  "salon y spa": "salon_belleza",
+  "veterinarias": "veterinaria",
+  "fotografia": "fotografia",
+  "gimnasios": "spa"
+};
+
+function slugifyCategoria(categoria) {
+  return String(categoria || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "") // quita acentos
+    .replace(/[^a-z0-9\s]/g, "")
+    .trim()
+    .replace(/\s+/g, "_");
+}
+__name(slugifyCategoria, "slugifyCategoria");
+
+function generateDefaultPromptForCategory(categoria) {
+  const cat = String(categoria || "Negocio");
+  const catLower = cat.toLowerCase();
+  // Singularización básica para redactar el prompt
+  const catSingular = catLower.replace(/(es|as|os)$/i, "").replace(/s$/i, "");
+  const catDisplay = catSingular.charAt(0).toUpperCase() + catSingular.slice(1);
+  return `Eres el asistente virtual de WhatsApp de {business_name}, un negocio de ${cat.toLowerCase()}. Tu función es ayudar a los clientes a agendar citas y resolver dudas sobre los servicios que se ofrecen.
+
+FECHA Y HORA:
+- Tu zona horaria es America/Santiago.
+- Horario habitual: lunes a viernes 09:00-18:00, sábado 09:00-14:00, domingo cerrado.
+- Si el cliente pide cita para hoy y ya pasó el horario, sugiere mañana.
+
+TU PERSONALIDAD:
+- Cercana, amable y profesional.
+- Saluda al inicio. Usa "tú" (trato informal).
+- Muestra emoción genuina: "Genial!", "Perfecto!", "Claro que sí!".
+
+PARA AGENDAR NECESITAS:
+- Fecha (obligatorio) en formato YYYY-MM-DD
+- Hora (obligatorio) en formato HH:MM (24h)
+- Servicio (obligatorio)
+
+FLUJO DE AGENDAMIENTO:
+1. Pregunta los datos que faltan UNO A UNO (no todos juntos).
+2. Antes de confirmar, verifica que la fecha sea futura y en horario de atención.
+3. Confirma con el cliente: "Te agendo para el [fecha] a las [hora] para [servicio]. ¿Confirmas?".
+4. Cuando el cliente diga "sí", "confirmo", "dale", etc.: agenda la cita.
+5. Nunca digas "te agendé" sin haber agendado realmente.
+
+REGLAS ESTRICTAS:
+1. Tu única función es agendar citas y resolver dudas sobre los servicios. NUNCA hables de otros temas.
+2. NUNCA menciones bases de datos, registros, ni sistemas internos.
+3. Si preguntan por precios, muestra la LISTA DE SERVICIOS de abajo. ACLARA que son referenciales.
+4. Si preguntan algo fuera de tu función: "Mi función es ayudarte a agendar una cita en {business_name}. ¿En qué servicio estás interesado?".
+5. Máximo 3-4 líneas por respuesta.
+6. NUNCA inventes precios, solo usa la lista de abajo.
+7. Formato WhatsApp: *negrita* con asteriscos, NO uses markdown []() ni tablas.
+
+LISTA DE SERVICIOS DISPONIBLES (precios REFERENCIALES):
+{servicios}
+
+NOTA SOBRE PRECIOS:
+- Los precios son REFERENCIALES. El costo final puede variar.
+- SIEMPRE muestra el precio aproximado al confirmar la cita.
+
+REGLAS CRÍTICAS DE FECHA Y HORA:
+- Cuando el cliente diga "mañana", "el martes", etc., SIEMPRE convierte a fecha numérica YYYY-MM-DD.
+- La hora en formato 24h HH:MM (ejemplo: 14:30, no "2 y media de la tarde").
+
+RECUERDA: Eres {business_name}. NO menciones que eres una IA, base de datos, sistema, etc. Eres el asistente del negocio.`;
+}
+__name(generateDefaultPromptForCategory, "generateDefaultPromptForCategory");
+
+// Normaliza un rubro/categoría para comparar (sin acentos, sin espacios, lowercase)
+function normalizeRubro(rubro) {
+  return String(rubro || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]/g, "");
+}
+__name(normalizeRubro, "normalizeRubro");
+
+// Devuelve la lista de variantes de rubro que deben considerarse iguales a la categoría dada
+function rubroAliasesFor(categoriaRaw) {
+  const catSlug = slugifyCategoria(categoriaRaw);
+  const catNorm = normalizeRubro(categoriaRaw);
+  const aliases = new Set([catSlug, catNorm, catSlug.replace(/_/g, "-"), catSlug.replace(/_/g, " ")]);
+  // Mapear a rubro legacy si existe
+  const legacy = CATEGORIA_TO_LEGACY_RUBRO[catNorm] || CATEGORIA_TO_LEGACY_RUBRO[catSlug];
+  if (legacy) {
+    aliases.add(legacy);
+    aliases.add(normalizeRubro(legacy));
+  }
+  // Caso inverso: si la categoría es un legacy (taller, barberia, etc.), incluir sus aunclick equivalents
+  for (const [aunSlug, leg] of Object.entries(CATEGORIA_TO_LEGACY_RUBRO)) {
+    if (normalizeRubro(leg) === catNorm || leg === catSlug) {
+      aliases.add(aunSlug);
+      aliases.add(normalizeRubro(aunSlug));
+    }
+  }
+  return Array.from(aliases).filter(Boolean);
+}
+__name(rubroAliasesFor, "rubroAliasesFor");
+
+// Cuenta cuántos tenants tienen un rubro que coincide con la categoría
+async function countTenantsByCategoria(env2, categoriaRaw) {
+  const tenantsRes = await env2.DB.prepare("SELECT rubro FROM tenants").all();
+  const aliases = new Set(rubroAliasesFor(categoriaRaw).map(normalizeRubro));
+  let count = 0;
+  for (const t of (tenantsRes.results || [])) {
+    if (aliases.has(normalizeRubro(t.rubro))) count++;
+  }
+  return count;
+}
+__name(countTenantsByCategoria, "countTenantsByCategoria");
+
+// Devuelve los tenants cuyo rubro coincide con la categoría
+async function findTenantsByCategoria(env2, categoriaRaw) {
+  const tenantsRes = await env2.DB.prepare("SELECT id, slug, business_name, rubro FROM tenants").all();
+  const aliases = new Set(rubroAliasesFor(categoriaRaw).map(normalizeRubro));
+  const out = [];
+  for (const t of (tenantsRes.results || [])) {
+    if (aliases.has(normalizeRubro(t.rubro))) out.push(t);
+  }
+  return out;
+}
+__name(findTenantsByCategoria, "findTenantsByCategoria");
+
+// Aplica la plantilla de prompt al tenant recién aprobado (MEJORA 14 parte 6)
+// Si existe plantilla para el rubro del tenant, se copia a custom_prompt del tenant
+async function applyTemplateOnApprove(env2, tenantId, rubro) {
+  try {
+    if (!tenantId || !rubro) return { applied: false, reason: "missing data" };
+    const slug = slugifyCategoria(rubro);
+    const clave = "prompt_template_" + slug;
+    const row = await env2.DB.prepare(
+      "SELECT valor FROM sgc_cit_config WHERE tenant_id = 0 AND clave = ?"
+    ).bind(clave).first();
+    if (!row?.valor) return { applied: false, reason: "no template for rubro" };
+    let prompt = null;
+    try {
+      const parsed = JSON.parse(row.valor);
+      prompt = parsed.prompt || (typeof parsed === "string" ? parsed : "");
+    } catch (e) {
+      prompt = row.valor;
+    }
+    if (!prompt) return { applied: false, reason: "empty prompt" };
+    await env2.DB.prepare(
+      "INSERT INTO sgc_cit_config (tenant_id, clave, valor) VALUES (?, 'custom_prompt', ?) ON CONFLICT(tenant_id, clave) DO UPDATE SET valor = ?"
+    ).bind(tenantId, prompt, prompt).run();
+    return { applied: true, slug, clave };
+  } catch (e) {
+    console.error("Error en applyTemplateOnApprove:", e);
+    return { applied: false, reason: "error: " + e.message };
+  }
+}
+__name(applyTemplateOnApprove, "applyTemplateOnApprove");
 
 export {
   index_default as default
