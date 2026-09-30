@@ -20,6 +20,10 @@ database_id = "678b4adc-232d-43db-86ec-230828268161"
 [ai]
 binding = "AI"
 
+[[r2_buckets]]
+binding = "FOTOS"
+bucket_name = "my-emdash-media"
+
 [vars]
 BUSINESS_NAME = "SGC"
 BUSINESS_PHONE = "56939026185"

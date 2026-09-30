@@ -863,6 +863,33 @@ function superAdminJson(data, status) {
   });
 }
 async function getSystemPrompt(env2, tenantId, businessName, servicios) {
+  // TAREA 5: Cargar productos y estado premium del tenant
+  let productosText = "";
+  let premiumProductsEnabled = false;
+  if (env2 && env2.DB && tenantId) {
+    try {
+      const productosResult = await env2.DB.prepare(
+        "SELECT nombre, descripcion, precio, categoria FROM sgc_cit_Productos WHERE activo = 1 AND tenant_id = ? ORDER BY orden, id"
+      ).bind(tenantId).all();
+      const prods = (productosResult.results || []);
+      if (prods.length > 0) {
+        productosText = prods.map((p, i) => {
+          const precioStr = p.precio > 0 ? `$${Number(p.precio).toLocaleString("es-CL")}` : "Consultar precio";
+          return `${i + 1}. ${p.nombre}${p.categoria ? ` (${p.categoria})` : ""} — ${p.descripcion || "Sin descripción"} — ${precioStr}`;
+        }).join("\n");
+      }
+    } catch (e) {
+      console.error("Error cargando productos en getSystemPrompt:", e);
+    }
+    try {
+      const premRow = await env2.DB.prepare(
+        "SELECT premium_products_enabled FROM tenants WHERE id = ?"
+      ).bind(tenantId).first();
+      premiumProductsEnabled = premRow?.premium_products_enabled === 1;
+    } catch (e) {
+      console.error("Error cargando premium_products_enabled en getSystemPrompt:", e);
+    }
+  }
   // Cargar prompt personalizado del tenant si existe
   if (env2 && env2.DB && tenantId) {
     try {
@@ -870,7 +897,7 @@ async function getSystemPrompt(env2, tenantId, businessName, servicios) {
         "SELECT valor FROM sgc_cit_config WHERE tenant_id = ? AND clave = 'custom_prompt'"
       ).bind(tenantId).first();
       if (customPrompt?.valor) {
-        // Sustituir variables {business_name}, {servicios}, {bot_name}
+        // Sustituir variables {business_name}, {servicios}, {bot_name}, {productos}
         let botName = "Sofi";
         try {
           const botNameCfg = await env2.DB.prepare(
@@ -881,7 +908,8 @@ async function getSystemPrompt(env2, tenantId, businessName, servicios) {
         let custom = customPrompt.valor
           .replace(/\{business_name\}/g, businessName || "")
           .replace(/\{bot_name\}/g, botName)
-          .replace(/\{servicios\}/g, servicios || "");
+          .replace(/\{servicios\}/g, servicios || "")
+          .replace(/\{productos\}/g, productosText || "");
         return custom;
       }
     } catch (e) {
@@ -1004,7 +1032,13 @@ REGLAS CR\u00cdTICAS DE FECHA Y HORA:
 - El campo fecha en el JSON DEBE SER SIEMPRE formato YYYY-MM-DD (ejemplo: 2026-06-23). NUNCA pongas "martes", "ma\u00f1ana", etc.
 - La hora en formato 24h HH:MM (ejemplo: 14:30, no "2 y media de la tarde")
 
-RECUERDA: Eres ${businessName}. NO menciones que eres una IA, base de datos, sistema, etc. Eres el asistente del negocio.`;
+RECUERDA: Eres ${businessName}. NO menciones que eres una IA, base de datos, sistema, etc. Eres el asistente del negocio.${productosText ? `
+
+PRODUCTOS DISPONIBLES (si el cliente pregunta por productos):
+${productosText}${premiumProductsEnabled ? `
+
+Puedes mencionar y describir los productos que tienes disponibles.
+Si el cliente pregunta por un producto espec\u00edfico, menciona su precio y descripci\u00f3n.` : ""}` : ""}`;
 }
 __name(getSystemPrompt, "getSystemPrompt");
 async function consultarVehiculoEnTaller(env2, patente) {
@@ -1600,6 +1634,29 @@ var index_default = {
         for (const msg of messages) {
           if (msg.role !== "system") {
             chatMessages.push(msg);
+          }
+        }
+
+        // ===== TAREA 6: GATE DE IM\u00c1GENES EN CHAT WEB (premium + products_enabled) =====
+        // Si el tenant no es premium o no tiene premium_products_enabled, no procesar imagen
+        if (image && typeof image === "string" && image.length > 100) {
+          const isPremium = chatTenant?.premium === 1;
+          const productsEnabled = chatTenant?.premium_products_enabled === 1;
+          if (!isPremium || !productsEnabled) {
+            const gateReply = "Esta funci\u00f3n est\u00e1 disponible solo para planes premium. \u00bfTe gustar\u00eda agendar una cita?";
+            const formattedGate = formatForWhatsApp(gateReply);
+            const sseGate = "data: " + JSON.stringify({
+              choices: [{ delta: { content: formattedGate }, finish_reason: null, index: 0 }],
+              response: formattedGate
+            }) + "\n\n";
+            return new Response(sseGate, {
+              headers: {
+                ...CORS_HEADERS,
+                "Content-Type": "text/event-stream; charset=utf-8",
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive"
+              }
+            });
           }
         }
 
@@ -3119,6 +3176,441 @@ Lamentamos las molestias. Para m\xE1s informaci\xF3n o reagendar, contacte direc
         });
       }
 
+      // ============================================================
+      // TAREA 2: ENDPOINTS DE PRODUCTOS (CRUD) - TENANT
+      // ============================================================
+
+      // GET /api/tenant/productos?t=<slug> - Lista productos activos del tenant
+      if (path === "/api/tenant/productos" && request.method === "GET") {
+        const slug = url.searchParams.get("t") || "sgc";
+        const tenant = await env2.DB.prepare("SELECT id FROM tenants WHERE slug = ?").bind(slug).first();
+        if (!tenant) {
+          return new Response(JSON.stringify({ success: false, error: "Tenant no encontrado" }), {
+            status: 404, headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
+          });
+        }
+        const productosRes = await env2.DB.prepare(
+          "SELECT id, nombre, descripcion, precio, categoria, imagen_url, imagen_r2_key, orden, created_at, updated_at FROM sgc_cit_Productos WHERE tenant_id = ? AND activo = 1 ORDER BY orden, id"
+        ).bind(tenant.id).all();
+        return new Response(JSON.stringify({ success: true, productos: productosRes.results || [] }), {
+          headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
+        });
+      }
+
+      // POST /api/tenant/productos?t=<slug> - Crea un producto
+      if (path === "/api/tenant/productos" && request.method === "POST") {
+        const slug = url.searchParams.get("t") || "sgc";
+        const tenant = await env2.DB.prepare("SELECT id FROM tenants WHERE slug = ?").bind(slug).first();
+        if (!tenant) {
+          return new Response(JSON.stringify({ success: false, error: "Tenant no encontrado" }), {
+            status: 404, headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
+          });
+        }
+        const body = await request.json().catch(() => ({}));
+        const nombre = String(body.nombre || "").trim();
+        if (!nombre) {
+          return new Response(JSON.stringify({ success: false, error: "Nombre es requerido" }), {
+            status: 400, headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
+          });
+        }
+        const descripcion = body.descripcion ? String(body.descripcion) : null;
+        const precio = parseInt(body.precio) || 0;
+        const categoria = body.categoria ? String(body.categoria) : null;
+        const imagen_url = body.imagen_url ? String(body.imagen_url) : null;
+        const orden = parseInt(body.orden) || 0;
+        const ins = await env2.DB.prepare(
+          "INSERT INTO sgc_cit_Productos (tenant_id, nombre, descripcion, precio, categoria, imagen_url, orden) VALUES (?, ?, ?, ?, ?, ?, ?)"
+        ).bind(tenant.id, nombre, descripcion, precio, categoria, imagen_url, orden).run();
+        return new Response(JSON.stringify({ success: true, producto_id: ins.meta?.last_row_id || null }), {
+          headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
+        });
+      }
+
+      // PUT /api/tenant/productos/:id?t=<slug> - Actualiza producto
+      const tenantProdUpdMatch = path.match(/^\/api\/tenant\/productos\/(\d+)$/);
+      if (tenantProdUpdMatch && request.method === "PUT") {
+        const prodId = parseInt(tenantProdUpdMatch[1]);
+        const slug = url.searchParams.get("t") || "sgc";
+        const tenant = await env2.DB.prepare("SELECT id FROM tenants WHERE slug = ?").bind(slug).first();
+        if (!tenant) {
+          return new Response(JSON.stringify({ success: false, error: "Tenant no encontrado" }), {
+            status: 404, headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
+          });
+        }
+        const body = await request.json().catch(() => ({}));
+        const allowed = ["nombre", "descripcion", "precio", "categoria", "imagen_url", "imagen_r2_key", "orden", "activo"];
+        const sets = [];
+        const vals = [];
+        for (const k of allowed) {
+          if (body[k] !== undefined) {
+            sets.push(`${k} = ?`);
+            vals.push(body[k]);
+          }
+        }
+        if (sets.length === 0) {
+          return new Response(JSON.stringify({ success: false, error: "Nada que actualizar" }), {
+            status: 400, headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
+          });
+        }
+        sets.push("updated_at = datetime('now','-3 hours')");
+        vals.push(prodId, tenant.id);
+        await env2.DB.prepare(
+          `UPDATE sgc_cit_Productos SET ${sets.join(", ")} WHERE id = ? AND tenant_id = ?`
+        ).bind(...vals).run();
+        return new Response(JSON.stringify({ success: true }), {
+          headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
+        });
+      }
+
+      // DELETE /api/tenant/productos/:id?t=<slug> - Soft delete
+      const tenantProdDelMatch = path.match(/^\/api\/tenant\/productos\/(\d+)$/);
+      if (tenantProdDelMatch && request.method === "DELETE") {
+        const prodId = parseInt(tenantProdDelMatch[1]);
+        const slug = url.searchParams.get("t") || "sgc";
+        const tenant = await env2.DB.prepare("SELECT id FROM tenants WHERE slug = ?").bind(slug).first();
+        if (!tenant) {
+          return new Response(JSON.stringify({ success: false, error: "Tenant no encontrado" }), {
+            status: 404, headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
+          });
+        }
+        await env2.DB.prepare(
+          "UPDATE sgc_cit_Productos SET activo = 0, updated_at = datetime('now','-3 hours') WHERE id = ? AND tenant_id = ?"
+        ).bind(prodId, tenant.id).run();
+        return new Response(JSON.stringify({ success: true }), {
+          headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
+        });
+      }
+
+      // POST /api/tenant/productos/:id/imagen?t=<slug> - Sube imagen a R2
+      const tenantProdImgMatch = path.match(/^\/api\/tenant\/productos\/(\d+)\/imagen$/);
+      if (tenantProdImgMatch && request.method === "POST") {
+        const prodId = parseInt(tenantProdImgMatch[1]);
+        const slug = url.searchParams.get("t") || "sgc";
+        const tenant = await env2.DB.prepare("SELECT id FROM tenants WHERE slug = ?").bind(slug).first();
+        if (!tenant) {
+          return new Response(JSON.stringify({ success: false, error: "Tenant no encontrado" }), {
+            status: 404, headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
+          });
+        }
+        const body = await request.json().catch(() => ({}));
+        const imagenB64 = body.imagen || body.image || "";
+        if (!imagenB64 || typeof imagenB64 !== "string") {
+          return new Response(JSON.stringify({ success: false, error: "imagen (base64) es requerida" }), {
+            status: 400, headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
+          });
+        }
+        if (!env2.FOTOS) {
+          return new Response(JSON.stringify({ success: false, error: "R2 no configurado (FOTOS binding faltante)" }), {
+            status: 500, headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
+          });
+        }
+        const b64 = imagenB64.replace(/^data:image\/[a-z]+;base64,/, "");
+        let bytes;
+        try {
+          const binStr = atob(b64);
+          bytes = new Uint8Array(binStr.length);
+          for (let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
+        } catch (e) {
+          return new Response(JSON.stringify({ success: false, error: "base64 inv\u00e1lido" }), {
+            status: 400, headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
+          });
+        }
+        const r2Key = `productos/${tenant.id}/${prodId}.jpg`;
+        await env2.FOTOS.put(r2Key, bytes, { httpMetadata: { contentType: "image/jpeg" } });
+        await env2.DB.prepare(
+          "UPDATE sgc_cit_Productos SET imagen_url = ?, imagen_r2_key = ?, updated_at = datetime('now','-3 hours') WHERE id = ? AND tenant_id = ?"
+        ).bind(r2Key, r2Key, prodId, tenant.id).run();
+        return new Response(JSON.stringify({ success: true, imagen_url: r2Key, imagen_r2_key: r2Key }), {
+          headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
+        });
+      }
+
+      // ============================================================
+      // TAREA 3: ENDPOINTS PREMIUM
+      // ============================================================
+
+      // GET /api/tenant/premium?t=<slug>
+      if (path === "/api/tenant/premium" && request.method === "GET") {
+        const slug = url.searchParams.get("t") || "sgc";
+        const tenant = await env2.DB.prepare("SELECT premium, premium_products_enabled FROM tenants WHERE slug = ?").bind(slug).first();
+        if (!tenant) {
+          return new Response(JSON.stringify({ success: false, error: "Tenant no encontrado" }), {
+            status: 404, headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
+          });
+        }
+        return new Response(JSON.stringify({
+          success: true,
+          premium: tenant.premium === 1,
+          products_enabled: tenant.premium_products_enabled === 1
+        }), {
+          headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
+        });
+      }
+
+      // POST /api/superadmin/tenants/<slug>/premium - activar/desactivar premium
+      const saPremiumMatch = path.match(/^\/api\/superadmin\/tenants\/([^/]+)\/premium$/);
+      if (saPremiumMatch && request.method === "POST") {
+        if (!superAdminCheckAuth(request, url)) return superAdminUnauthorized();
+        const slug = decodeURIComponent(saPremiumMatch[1]);
+        const body = await request.json().catch(() => ({}));
+        const premiumVal = body.premium === true || body.premium === 1 ? 1 : 0;
+        const result = await env2.DB.prepare("UPDATE tenants SET premium = ? WHERE slug = ?").bind(premiumVal, slug).run();
+        if (!result.meta || result.meta.changes === 0) {
+          return superAdminJson({ success: false, error: "Tenant no encontrado" }, 404);
+        }
+        return superAdminJson({ success: true, slug, premium: premiumVal === 1 });
+      }
+
+      // POST /api/superadmin/tenants/<slug>/products-toggle
+      const saProductsToggleMatch = path.match(/^\/api\/superadmin\/tenants\/([^/]+)\/products-toggle$/);
+      if (saProductsToggleMatch && request.method === "POST") {
+        if (!superAdminCheckAuth(request, url)) return superAdminUnauthorized();
+        const slug = decodeURIComponent(saProductsToggleMatch[1]);
+        const body = await request.json().catch(() => ({}));
+        const enabledVal = body.enabled === true || body.enabled === 1 ? 1 : 0;
+        const result = await env2.DB.prepare("UPDATE tenants SET premium_products_enabled = ? WHERE slug = ?").bind(enabledVal, slug).run();
+        if (!result.meta || result.meta.changes === 0) {
+          return superAdminJson({ success: false, error: "Tenant no encontrado" }, 404);
+        }
+        return superAdminJson({ success: true, slug, products_enabled: enabledVal === 1 });
+      }
+
+      // ============================================================
+      // TAREA 4: ESC\u00c1NER DE MEN\u00da CON IA
+      // ============================================================
+
+      // POST /api/superadmin/tenants/<slug>/scan-menu
+      const saScanMenuMatch = path.match(/^\/api\/superadmin\/tenants\/([^/]+)\/scan-menu$/);
+      if (saScanMenuMatch && request.method === "POST") {
+        if (!superAdminCheckAuth(request, url)) return superAdminUnauthorized();
+        const slug = decodeURIComponent(saScanMenuMatch[1]);
+        const tenant = await env2.DB.prepare("SELECT id, business_name FROM tenants WHERE slug = ?").bind(slug).first();
+        if (!tenant) return superAdminJson({ success: false, error: "Tenant no encontrado" }, 404);
+
+        const body = await request.json().catch(() => ({}));
+        const menuUrl = body.url ? String(body.url).trim() : null;
+        const imagenB64 = body.imagen || body.image || null;
+
+        if (!menuUrl && !imagenB64) {
+          return superAdminJson({ success: false, error: "Se requiere 'url' o 'imagen' (base64)" }, 400);
+        }
+
+        const SCAN_PROMPT_IMG = "Extrae la lista de productos y servicios con sus precios de esta imagen de men\u00fa. Responde SOLO en formato JSON v\u00e1lido: {\"productos\": [{\"nombre\": \"...\", \"precio\": 0, \"descripcion\": \"...\"}], \"servicios\": [{\"nombre\": \"...\", \"precio\": 0, \"descripcion\": \"...\"}]}";
+        let extractedData = { productos: [], servicios: [] };
+
+        try {
+          if (imagenB64) {
+            const b64 = imagenB64.replace(/^data:image\/[a-z]+;base64,/, "");
+            const binStr = atob(b64);
+            const bytes = new Uint8Array(binStr.length);
+            for (let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
+            // Usar modelo LLaVA disponible en la cuenta (@cf/llava-hf/llava-1.5-7b-hf)
+            // con fallback al especificado en el task (@cf/llava/hf-llava-v1.5-2.6b)
+            let llavaRes;
+            try {
+              llavaRes = await env2.AI.run("@cf/llava-hf/llava-1.5-7b-hf", {
+                image: [...bytes],
+                prompt: SCAN_PROMPT_IMG
+              });
+            } catch (e1) {
+              console.log("Modelo llava-1.5-7b-hf no disponible, intentando fallback:", e1.message);
+              llavaRes = await env2.AI.run("@cf/llava/hf-llava-v1.5-2.6b", {
+                image: [...bytes],
+                prompt: SCAN_PROMPT_IMG
+              });
+            }
+            const rawText = (llavaRes?.description || llavaRes?.response || "").trim();
+            const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+            if (jsonMatch) {
+              try { extractedData = JSON.parse(jsonMatch[0]); } catch (e) {
+                console.log("LLaVA JSON parse failed, raw:", rawText.slice(0, 200));
+              }
+            }
+          } else if (menuUrl) {
+            const pageRes = await fetch(menuUrl, {
+              headers: { "User-Agent": "Mozilla/5.0 (compatible; SGCScanner/1.0)" }
+            });
+            if (!pageRes.ok) {
+              return superAdminJson({ success: false, error: `No se pudo obtener la URL (status ${pageRes.status})` }, 502);
+            }
+            const contentType = pageRes.headers.get("content-type") || "";
+            if (contentType.includes("image/")) {
+              const imgBuf = await pageRes.arrayBuffer();
+              const imgBytes = [...new Uint8Array(imgBuf)];
+              let llavaRes;
+              try {
+                llavaRes = await env2.AI.run("@cf/llava-hf/llava-1.5-7b-hf", {
+                  image: imgBytes,
+                  prompt: SCAN_PROMPT_IMG
+                });
+              } catch (e1) {
+                console.log("Modelo llava-1.5-7b-hf no disponible, intentando fallback:", e1.message);
+                llavaRes = await env2.AI.run("@cf/llava/hf-llava-v1.5-2.6b", {
+                  image: imgBytes,
+                  prompt: SCAN_PROMPT_IMG
+                });
+              }
+              const rawText = (llavaRes?.description || llavaRes?.response || "").trim();
+              const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+              if (jsonMatch) {
+                try { extractedData = JSON.parse(jsonMatch[0]); } catch (e) {}
+              }
+            } else {
+              const html = await pageRes.text();
+              const pageText = html
+                .replace(/<script[\s\S]*?<\/script>/gi, " ")
+                .replace(/<style[\s\S]*?<\/style>/gi, " ")
+                .replace(/<[^>]+>/g, " ")
+                .replace(/&nbsp;/g, " ")
+                .replace(/&amp;/g, "&")
+                .replace(/\s+/g, " ")
+                .trim()
+                .slice(0, 8000);
+
+              const llamaRes = await env2.AI.run("@cf/meta/llama-3.2-3b-instruct", {
+                messages: [
+                  { role: "system", content: "Eres un asistente que extrae informaci\u00f3n de men\u00fas. Responde SOLO en JSON v\u00e1lido." },
+                  { role: "user", content: `Extrae la lista de productos y servicios con sus precios del siguiente texto de un men\u00fa. Responde SOLO en formato JSON: {"productos": [{"nombre": "...", "precio": 0, "descripcion": "..."}], "servicios": [{"nombre": "...", "precio": 0, "descripcion": "..."}]}\n\nTEXTO:\n${pageText}` }
+                ],
+                max_tokens: 1024
+              });
+              const rawText = (llamaRes?.response || "").trim();
+              const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+              if (jsonMatch) {
+                try { extractedData = JSON.parse(jsonMatch[0]); } catch (e) {}
+              }
+            }
+          }
+        } catch (e) {
+          return superAdminJson({ success: false, error: "Error procesando men\u00fa: " + e.message }, 500);
+        }
+
+        let productosCreados = 0;
+        let serviciosCreados = 0;
+        const productosList = Array.isArray(extractedData.productos) ? extractedData.productos : [];
+        const serviciosList = Array.isArray(extractedData.servicios) ? extractedData.servicios : [];
+
+        let ordenCounter = 0;
+        for (const p of productosList) {
+          if (!p || !p.nombre) continue;
+          const nombre = String(p.nombre).trim().slice(0, 200);
+          if (!nombre) continue;
+          const descripcion = p.descripcion ? String(p.descripcion).slice(0, 1000) : null;
+          const precio = parseInt(String(p.precio).replace(/[^0-9]/g, "")) || 0;
+          try {
+            await env2.DB.prepare(
+              "INSERT INTO sgc_cit_Productos (tenant_id, nombre, descripcion, precio, categoria, orden) VALUES (?, ?, ?, ?, 'producto', ?)"
+            ).bind(tenant.id, nombre, descripcion, precio, ordenCounter++).run();
+            productosCreados++;
+          } catch (e) {
+            console.log("Error insertando producto de men\u00fa:", e.message);
+          }
+        }
+
+        for (const s of serviciosList) {
+          if (!s || !s.nombre) continue;
+          const nombre = String(s.nombre).trim().slice(0, 200);
+          if (!nombre) continue;
+          const descripcion = s.descripcion ? String(s.descripcion).slice(0, 1000) : null;
+          const precio = parseInt(String(s.precio).replace(/[^0-9]/g, "")) || 0;
+          try {
+            await env2.DB.prepare(
+              "INSERT INTO sgc_cit_servicios_unificados (tenant_id, nombre, descripcion, precio, duracion_minutos, categoria, activo, orden) VALUES (?, ?, ?, ?, 60, 'menu_scan', 1, ?)"
+            ).bind(tenant.id, nombre, descripcion, precio, ordenCounter++).run();
+            serviciosCreados++;
+          } catch (e) {
+            console.log("Error insertando servicio de men\u00fa (tabla posiblemente no existe):", e.message);
+          }
+        }
+
+        return superAdminJson({
+          success: true,
+          slug,
+          tenant_id: tenant.id,
+          productos_creados: productosCreados,
+          servicios_creados: serviciosCreados,
+          extraidos: {
+            productos: productosList.length,
+            servicios: serviciosList.length
+          }
+        });
+      }
+
+      // ============================================================
+      // TAREA 7: SUPER ADMIN ENDPOINTS ADICIONALES PARA PRODUCTOS
+      // ============================================================
+
+      // GET /api/superadmin/tenants/<slug>/productos - lista todos (incluye inactivos)
+      // POST /api/superadmin/tenants/<slug>/productos - crea producto
+      const saProductosListMatch = path.match(/^\/api\/superadmin\/tenants\/([^/]+)\/productos$/);
+      if (saProductosListMatch && request.method === "GET") {
+        if (!superAdminCheckAuth(request, url)) return superAdminUnauthorized();
+        const slug = decodeURIComponent(saProductosListMatch[1]);
+        const tenant = await env2.DB.prepare("SELECT id FROM tenants WHERE slug = ?").bind(slug).first();
+        if (!tenant) return superAdminJson({ success: false, error: "Tenant no encontrado" }, 404);
+        const productosRes = await env2.DB.prepare(
+          "SELECT * FROM sgc_cit_Productos WHERE tenant_id = ? ORDER BY activo DESC, orden, id"
+        ).bind(tenant.id).all();
+        return superAdminJson({ success: true, slug, tenant_id: tenant.id, productos: productosRes.results || [] });
+      }
+      if (saProductosListMatch && request.method === "POST") {
+        if (!superAdminCheckAuth(request, url)) return superAdminUnauthorized();
+        const slug = decodeURIComponent(saProductosListMatch[1]);
+        const tenant = await env2.DB.prepare("SELECT id FROM tenants WHERE slug = ?").bind(slug).first();
+        if (!tenant) return superAdminJson({ success: false, error: "Tenant no encontrado" }, 404);
+        const body = await request.json().catch(() => ({}));
+        const nombre = String(body.nombre || "").trim();
+        if (!nombre) return superAdminJson({ success: false, error: "Nombre es requerido" }, 400);
+        const descripcion = body.descripcion ? String(body.descripcion) : null;
+        const precio = parseInt(body.precio) || 0;
+        const categoria = body.categoria ? String(body.categoria) : null;
+        const imagen_url = body.imagen_url ? String(body.imagen_url) : null;
+        const orden = parseInt(body.orden) || 0;
+        const ins = await env2.DB.prepare(
+          "INSERT INTO sgc_cit_Productos (tenant_id, nombre, descripcion, precio, categoria, imagen_url, orden) VALUES (?, ?, ?, ?, ?, ?, ?)"
+        ).bind(tenant.id, nombre, descripcion, precio, categoria, imagen_url, orden).run();
+        return superAdminJson({ success: true, producto_id: ins.meta?.last_row_id || null });
+      }
+
+      // PUT /api/superadmin/tenants/<slug>/productos/:id - actualiza producto
+      // DELETE /api/superadmin/tenants/<slug>/productos/:id - elimina (soft)
+      const saProdUpdMatch = path.match(/^\/api\/superadmin\/tenants\/([^/]+)\/productos\/(\d+)$/);
+      if (saProdUpdMatch && request.method === "PUT") {
+        if (!superAdminCheckAuth(request, url)) return superAdminUnauthorized();
+        const slug = decodeURIComponent(saProdUpdMatch[1]);
+        const prodId = parseInt(saProdUpdMatch[2]);
+        const tenant = await env2.DB.prepare("SELECT id FROM tenants WHERE slug = ?").bind(slug).first();
+        if (!tenant) return superAdminJson({ success: false, error: "Tenant no encontrado" }, 404);
+        const body = await request.json().catch(() => ({}));
+        const allowed = ["nombre", "descripcion", "precio", "categoria", "imagen_url", "imagen_r2_key", "orden", "activo"];
+        const sets = [];
+        const vals = [];
+        for (const k of allowed) {
+          if (body[k] !== undefined) {
+            sets.push(`${k} = ?`);
+            vals.push(body[k]);
+          }
+        }
+        if (sets.length === 0) return superAdminJson({ success: false, error: "Nada que actualizar" }, 400);
+        sets.push("updated_at = datetime('now','-3 hours')");
+        vals.push(prodId, tenant.id);
+        await env2.DB.prepare(
+          `UPDATE sgc_cit_Productos SET ${sets.join(", ")} WHERE id = ? AND tenant_id = ?`
+        ).bind(...vals).run();
+        return superAdminJson({ success: true });
+      }
+      if (saProdUpdMatch && request.method === "DELETE") {
+        if (!superAdminCheckAuth(request, url)) return superAdminUnauthorized();
+        const slug = decodeURIComponent(saProdUpdMatch[1]);
+        const prodId = parseInt(saProdUpdMatch[2]);
+        const tenant = await env2.DB.prepare("SELECT id FROM tenants WHERE slug = ?").bind(slug).first();
+        if (!tenant) return superAdminJson({ success: false, error: "Tenant no encontrado" }, 404);
+        await env2.DB.prepare(
+          "UPDATE sgc_cit_Productos SET activo = 0, updated_at = datetime('now','-3 hours') WHERE id = ? AND tenant_id = ?"
+        ).bind(prodId, tenant.id).run();
+        return superAdminJson({ success: true });
+      }
+
       // === FIN SUPER ADMIN ENDPOINTS ===
 
       return env2.ASSETS.fetch(request);
@@ -3559,6 +4051,33 @@ Si necesitas reprogramar, escribenos por aqui \u{1F60A}`;
 __name(handleWhatsAppWebhook, "handleWhatsAppWebhook");
 
 async function buildWhatsAppSystemPrompt(env2, tenantId, serviciosText, conversation, pushName, tenantName, tenantPhone) {
+  // TAREA 5: Cargar productos y estado premium del tenant
+  let productosText = "";
+  let premiumProductsEnabled = false;
+  if (env2 && env2.DB && tenantId) {
+    try {
+      const productosResult = await env2.DB.prepare(
+        "SELECT nombre, descripcion, precio, categoria FROM sgc_cit_Productos WHERE activo = 1 AND tenant_id = ? ORDER BY orden, id"
+      ).bind(tenantId).all();
+      const prods = (productosResult.results || []);
+      if (prods.length > 0) {
+        productosText = prods.map((p, i) => {
+          const precioStr = p.precio > 0 ? `$${Number(p.precio).toLocaleString("es-CL")}` : "Consultar precio";
+          return `${i + 1}. ${p.nombre}${p.categoria ? ` (${p.categoria})` : ""} — ${p.descripcion || "Sin descripci\u00f3n"} — ${precioStr}`;
+        }).join("\n");
+      }
+    } catch (e) {
+      console.error("Error cargando productos en buildWhatsAppSystemPrompt:", e);
+    }
+    try {
+      const premRow = await env2.DB.prepare(
+        "SELECT premium_products_enabled FROM tenants WHERE id = ?"
+      ).bind(tenantId).first();
+      premiumProductsEnabled = premRow?.premium_products_enabled === 1;
+    } catch (e) {
+      console.error("Error cargando premium_products_enabled en buildWhatsAppSystemPrompt:", e);
+    }
+  }
   // Cargar prompt personalizado del tenant si existe
   if (env2 && env2.DB && tenantId) {
     try {
@@ -3588,6 +4107,7 @@ async function buildWhatsAppSystemPrompt(env2, tenantId, serviciosText, conversa
           .replace(/\{business_name\}/g, tenantName || env2.BUSINESS_NAME || "")
           .replace(/\{bot_name\}/g, botName)
           .replace(/\{servicios\}/g, serviciosText || "")
+          .replace(/\{productos\}/g, productosText || "")
           .replace(/\{push_name\}/g, pushName || "desconocido")
           .replace(/\{phone\}/g, conversation?.phone || "")
           .replace(/\{tenant_phone\}/g, tenantPhone || env2.BUSINESS_PHONE || "")
@@ -3665,7 +4185,13 @@ REGLAS:
 DATOS DEL CLIENTE:
 ${clientContext}
 Nombre contacto: ${pushName || "desconocido"}
-Telefono: +${conversation.phone}`;
+Telefono: +${conversation.phone}${productosText ? `
+
+PRODUCTOS DISPONIBLES (si el cliente pregunta por productos):
+${productosText}${premiumProductsEnabled ? `
+
+Puedes mencionar y describir los productos que tienes disponibles.
+Si el cliente pregunta por un producto espec\u00edfico, menciona su precio y descripci\u00f3n.` : ""}` : ""}`;
 }
 __name(buildWhatsAppSystemPrompt, "buildWhatsAppSystemPrompt");
 
