@@ -322,8 +322,13 @@
       color: var(--info); padding: 4px 10px; border-radius: 999px;
       font-size: 0.74rem; font-weight: 600; margin-top: 6px;
       max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      cursor: pointer; transition: all 0.15s; user-select: none;
     }
     .cat-badge::before { content: "🏷️"; flex-shrink: 0; }
+    .cat-badge .cat-edit { font-size: 0.7rem; opacity: 0.7; margin-left: 2px; }
+    .cat-badge:hover { background: rgba(59,130,246,0.25); border-color: var(--info); transform: translateY(-1px); }
+    .cat-badge:hover .cat-edit { opacity: 1; }
+    .cat-badge:active { transform: translateY(0); }
 
     /* ===== Loading / empty states ===== */
     .center-msg {
@@ -720,6 +725,36 @@
     </div>
   </div>
 
+  <!-- ===== PROMPT IA MODAL (🤖 IA por tenant) ===== -->
+  <div class="modal-overlay" id="promptModal">
+    <div class="modal">
+      <div class="modal-head">
+        <div>
+          <h3>🤖 IA — <span id="promptTenantName"></span></h3>
+          <div class="sub">Edita el prompt personalizado y el nombre del bot. Variables: <code>{business_name}</code>, <code>{servicios}</code>.</div>
+        </div>
+        <button class="modal-close" onclick="closeModal('promptModal')">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>Nombre del bot <span class="req">*</span></label>
+          <input type="text" id="promptBotName" placeholder="Ej: Sofi" maxlength="40">
+          <div class="hint" style="font-size:0.78rem;color:var(--text-dim);margin-top:5px;">Así se presenta el bot ante los clientes.</div>
+        </div>
+        <div class="form-group">
+          <label>Prompt del sistema (system prompt)</label>
+          <textarea id="promptSystem" rows="12" placeholder="Cargando prompt actual…" style="width:100%;background:var(--bg-2);border:1px solid var(--border-light);color:#fff;padding:12px;border-radius:10px;font-family:monospace;font-size:0.82rem;line-height:1.5;resize:vertical;"></textarea>
+          <div class="hint" style="font-size:0.78rem;color:var(--text-dim);margin-top:5px;">Si lo dejas vacío, se usará la plantilla default de la categoría del negocio.</div>
+        </div>
+        <div id="promptError" class="login-error"></div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn" onclick="closeModal('promptModal')">Cancelar</button>
+        <button class="btn primary" id="promptSaveBtn" onclick="savePrompt()">💾 Guardar IA</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ===== TOAST ===== -->
   <div id="toast" class="toast hidden"></div>
 
@@ -1087,6 +1122,70 @@
     }
 
     // ============================================================
+    // 🤖 IA: EDITOR DE PROMPT POR TENANT
+    // ============================================================
+    let currentPromptSlug = null;
+
+    async function openPromptModal(slug) {
+      const tenant = tenants.find(t => t.slug === slug);
+      if (!tenant) { showToast('error', 'Tenant no encontrado'); return; }
+      currentPromptSlug = slug;
+      document.getElementById('promptTenantName').textContent = tenant.business_name || slug;
+      document.getElementById('promptError').classList.remove('show');
+      document.getElementById('promptSystem').value = '';
+      document.getElementById('promptSystem').placeholder = 'Cargando prompt actual…';
+      document.getElementById('promptBotName').value = 'Sofi';
+      document.getElementById('promptSaveBtn').disabled = true;
+      document.getElementById('promptSaveBtn').textContent = 'Cargando…';
+      openModal('promptModal');
+      try {
+        const data = await apiGet(`/api/superadmin/tenants/${encodeURIComponent(slug)}/prompt`);
+        if (!data.success) {
+          document.getElementById('promptError').textContent = '❌ ' + (data.error || 'Error al cargar prompt');
+          document.getElementById('promptError').classList.add('show');
+          return;
+        }
+        document.getElementById('promptSystem').value = data.custom_prompt || '';
+        document.getElementById('promptSystem').placeholder = 'Vacío = se usa la plantilla default de la categoría ("' + (data.rubro || 'otro') + '")';
+        document.getElementById('promptBotName').value = data.bot_name || 'Sofi';
+      } catch (err) {
+        document.getElementById('promptError').textContent = '❌ Error: ' + err.message;
+        document.getElementById('promptError').classList.add('show');
+      } finally {
+        document.getElementById('promptSaveBtn').disabled = false;
+        document.getElementById('promptSaveBtn').textContent = '💾 Guardar IA';
+      }
+    }
+
+    async function savePrompt() {
+      const errBox = document.getElementById('promptError');
+      const btn = document.getElementById('promptSaveBtn');
+      errBox.classList.remove('show');
+      if (!currentPromptSlug) return;
+      const botName = document.getElementById('promptBotName').value.trim() || 'Sofi';
+      const customPrompt = document.getElementById('promptSystem').value;
+      btn.disabled = true; btn.textContent = 'Guardando…';
+      try {
+        const data = await apiPut(`/api/superadmin/tenants/${encodeURIComponent(currentPromptSlug)}/prompt`, {
+          custom_prompt: customPrompt,
+          bot_name: botName
+        });
+        if (data.success) {
+          showToast('success', `✅ IA actualizada para ${currentPromptSlug}`);
+          closeModal('promptModal');
+        } else {
+          errBox.textContent = '❌ ' + (data.error || 'Error al guardar');
+          errBox.classList.add('show');
+        }
+      } catch (err) {
+        errBox.textContent = '❌ Error: ' + err.message;
+        errBox.classList.add('show');
+      } finally {
+        btn.disabled = false; btn.textContent = '💾 Guardar IA';
+      }
+    }
+
+    // ============================================================
     // LOAD + RENDER TENANTS
     // ============================================================
     async function loadTenants() {
@@ -1151,7 +1250,7 @@
                 <div class="info">
                   <h3>${escapeHtml(t.business_name)}</h3>
                   <div class="meta">slug: <code>${escapeHtml(t.slug)}</code></div>
-                  <span class="cat-badge" title="Categoría actual del negocio">${escapeHtml(t.rubro || 'otro')}</span>
+                  <span class="cat-badge" title="Click para cambiar la categoría" onclick="event.stopPropagation();openCategoriaModal('${escapeAttr(t.slug)}')">${escapeHtml(t.rubro || 'otro')} <span class="cat-edit">✎</span></span>
                 </div>
               </div>
               <div class="right-col">
@@ -1193,13 +1292,13 @@
               <div class="value small ${t.evolution_instance ? 'success' : 'muted'}">${evoInstance}</div>
             </div>
             <div class="actions-row">
-              <a class="btn" href="${t.links.chat}" target="_blank" rel="noopener">💬 Chat</a>
-              <a class="btn" href="${t.links.admin}" target="_blank" rel="noopener">🔧 Admin</a>
-              <a class="btn" href="${t.links.status}" target="_blank" rel="noopener">📊 Estado</a>
-              <button class="btn" onclick="showQR('${escapeAttr(t.slug)}')" ${!t.evolution_instance ? 'disabled title="Sin instancia Evolution"' : ''}>📱 Ver QR</button>
-              <button class="btn" onclick="showCitas('${escapeAttr(t.slug)}')">📅 Ver citas</button>
-              <button class="btn primary" onclick="showCreateCita('${escapeAttr(t.slug)}')">➕ Crear cita</button>
-              <button class="btn info" onclick="openCategoriaModal('${escapeAttr(t.slug)}')" title="Cambiar la categoría del negocio">🏷️ Cambiar categoría</button>
+              <a class="btn" href="https://sgc-saas.pages.dev/chat?t=${escapeAttr(t.slug)}" target="_blank" rel="noopener" title="Abrir chat del bot">💬 Chat</a>
+              <a class="btn" href="https://sgc-saas.pages.dev/admin?t=${escapeAttr(t.slug)}" target="_blank" rel="noopener" title="Abrir panel admin">🔧 Admin</a>
+              <a class="btn" href="https://sgc-saas.pages.dev/status?slug=${escapeAttr(t.slug)}" target="_blank" rel="noopener" title="Ver estado de la instancia">📊 Estado</a>
+              <button class="btn" onclick="showQR('${escapeAttr(t.slug)}')" ${!t.evolution_instance ? 'disabled title="Sin instancia Evolution"' : ''} title="Ver código QR">📱 QR</button>
+              <button class="btn" onclick="showCitas('${escapeAttr(t.slug)}')" title="Ver citas">📅 Citas</button>
+              <button class="btn primary" onclick="showCreateCita('${escapeAttr(t.slug)}')" title="Crear cita">➕ Crear</button>
+              <button class="btn info" onclick="openPromptModal('${escapeAttr(t.slug)}')" title="Editar prompt de IA y nombre del bot">🤖 IA</button>
               ${isPending ? `
                 <button class="btn warn" onclick="approveTenant('${escapeAttr(t.slug)}')">✅ Aprobar</button>
                 <button class="btn danger" onclick="rejectTenant('${escapeAttr(t.slug)}')">❌ Rechazar</button>

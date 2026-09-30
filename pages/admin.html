@@ -127,6 +127,8 @@
       transition: all 0.2s;
     }
     .kpi-card:hover { border-color: var(--border-light); transform: translateY(-2px); }
+    .kpi-card { cursor: pointer; }
+    .kpi-card:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
     .kpi-card::before {
       content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
       background: var(--primary);
@@ -696,25 +698,25 @@
 
       <!-- KPIs -->
       <div class="kpis-grid" id="kpisGrid">
-        <div class="kpi-card success">
+        <div class="kpi-card success" role="button" tabindex="0" onclick="goToCitas('hoy')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();goToCitas('hoy')}" title="Ver citas de hoy">
           <span class="kpi-icon">📊</span>
           <div class="kpi-label">Citas hoy</div>
           <div class="kpi-value" id="kpiHoy">0</div>
           <div class="kpi-sub">agendadas para hoy</div>
         </div>
-        <div class="kpi-card warn">
+        <div class="kpi-card warn" role="button" tabindex="0" onclick="goToCitas('pendiente')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();goToCitas('pendiente')}" title="Ver citas pendientes">
           <span class="kpi-icon">⏳</span>
           <div class="kpi-label">Pendientes</div>
           <div class="kpi-value" id="kpiPend">0</div>
           <div class="kpi-sub">esperando aprobación</div>
         </div>
-        <div class="kpi-card info">
+        <div class="kpi-card info" role="button" tabindex="0" onclick="goToCitas('aprobada')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();goToCitas('aprobada')}" title="Ver citas activas/aprobadas">
           <span class="kpi-icon">✅</span>
           <div class="kpi-label">Activas</div>
           <div class="kpi-value" id="kpiActivas">0</div>
           <div class="kpi-sub">confirmadas totales</div>
         </div>
-        <div class="kpi-card">
+        <div class="kpi-card" role="button" tabindex="0" onclick="goToCitas('todas')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();goToCitas('todas')}" title="Ir a citas">
           <span class="kpi-icon">💬</span>
           <div class="kpi-label">Conversaciones</div>
           <div class="kpi-value" id="kpiConv">0</div>
@@ -1362,6 +1364,27 @@
         loadCitas();
       });
     });
+
+    // ===== KPIs clickeables: ir al tab Citas con un filtro dado =====
+    function goToCitas(filter) {
+      // Activar tab Citas
+      document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(x => x.classList.remove('active'));
+      const citasTab = document.querySelector('.tab[data-tab="citas"]');
+      if (citasTab) citasTab.classList.add('active');
+      const citasContent = document.getElementById('tab-citas');
+      if (citasContent) citasContent.classList.add('active');
+      // Activar filtro solicitado (o "todas" si no existe)
+      const wanted = filter || 'todas';
+      document.querySelectorAll('.filters-bar .filter-pill').forEach(x => x.classList.remove('active'));
+      const pill = document.querySelector('.filters-bar .filter-pill[data-filter="' + wanted + '"]');
+      if (pill) pill.classList.add('active');
+      currentFilter = wanted;
+      loadCitas();
+      // Llevar al usuario al inicio del contenido
+      try { document.getElementById('kpisGrid').scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) {}
+    }
+    window.goToCitas = goToCitas;
 
     // Auto-refresh
     function startAutoRefresh() {
