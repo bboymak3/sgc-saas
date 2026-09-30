@@ -1573,7 +1573,8 @@ var index_default = {
         });
       }
       if (path === "/api/chat" && request.method === "POST") {
-        const { messages } = await request.json();
+        const chatReqBody = await request.json();
+        const { messages, image } = chatReqBody;
         if (!messages || messages.length === 0) {
           return new Response(JSON.stringify({ error: "No se proporcionaron mensajes" }), {
             status: 400,
@@ -1601,7 +1602,31 @@ var index_default = {
             chatMessages.push(msg);
           }
         }
-        
+
+        // ===== MEJORA 17 (web): Si viene una imagen en base64, analizarla con LLaVA y
+        // agregar la descripción como contexto al último mensaje del usuario =====
+        if (image && typeof image === "string" && image.length > 100) {
+          try {
+            const b64 = image.replace(/^data:image\/[a-z]+;base64,/, "");
+            const binStr = atob(b64);
+            const bytes = new Uint8Array(binStr.length);
+            for (let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
+            const llavaRes = await env2.AI.run("@cf/llava/hf-llava-v1.5-2.6b", {
+              image: [...bytes],
+              prompt: "What do you see in this image? Is there a visible license plate (patente)? Describe briefly."
+            });
+            const desc = (llavaRes?.description || llavaRes?.response || "").slice(0, 300);
+            if (desc && desc.length > 5) {
+              const lastIdx = chatMessages.length - 1;
+              if (chatMessages[lastIdx] && chatMessages[lastIdx].role === "user") {
+                chatMessages[lastIdx].content = `(El cliente adjuntó una imagen. Análisis automático: ${desc}) ${chatMessages[lastIdx].content || ""}`.trim();
+              }
+            }
+          } catch (e) {
+            console.log("LLaVA image analysis failed (web chat):", e.message);
+          }
+        }
+
         // ============================================================
         // FUNCTION CALLING (igual que el webhook de WhatsApp)
         // ============================================================
@@ -1995,6 +2020,34 @@ Lamentamos las molestias. Para m\xE1s informaci\xF3n o reagendar, contacte direc
       }
       if (path === "/api/whatsapp/test" && request.method === "GET") {
         return new Response(JSON.stringify({ ok: true, msg: "Webhook endpoint activo", time: new Date().toISOString() }), {
+          headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
+        });
+      }
+
+      // ============================================================
+      // MEJORA 12 (PWA): Toggle pause / bot status — solo con slug (sin super admin)
+      // ============================================================
+      if (path === "/api/tenant/toggle-pause" && request.method === "POST") {
+        const tpSlug = url.searchParams.get("t") || "";
+        if (!tpSlug) return new Response(JSON.stringify({ success: false, error: "Falta slug (?t=)" }), { status: 400, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } });
+        const tpTenant = await env2.DB.prepare("SELECT id, business_name FROM tenants WHERE slug = ?").bind(tpSlug).first();
+        if (!tpTenant) return new Response(JSON.stringify({ success: false, error: "Tenant no encontrado" }), { status: 404, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } });
+        const cur = await env2.DB.prepare("SELECT valor FROM sgc_cit_config WHERE tenant_id = ? AND clave = 'bot_paused'").bind(tpTenant.id).first();
+        const isPaused = cur?.valor === "true";
+        const nextVal = isPaused ? "false" : "true";
+        await env2.DB.prepare("INSERT OR REPLACE INTO sgc_cit_config (tenant_id, clave, valor) VALUES (?, 'bot_paused', ?)").bind(tpTenant.id, nextVal).run();
+        return new Response(JSON.stringify({ success: true, bot_paused: nextVal === "true", message: nextVal === "true" ? `Bot pausado para ${tpTenant.business_name}` : `Bot reactivado para ${tpTenant.business_name}` }), {
+          headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
+        });
+      }
+
+      if (path === "/api/tenant/bot-status" && request.method === "GET") {
+        const bsSlug = url.searchParams.get("t") || "";
+        if (!bsSlug) return new Response(JSON.stringify({ success: false, error: "Falta slug (?t=)" }), { status: 400, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } });
+        const bsTenant = await env2.DB.prepare("SELECT id, business_name FROM tenants WHERE slug = ?").bind(bsSlug).first();
+        if (!bsTenant) return new Response(JSON.stringify({ success: false, error: "Tenant no encontrado" }), { status: 404, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } });
+        const bsRow = await env2.DB.prepare("SELECT valor FROM sgc_cit_config WHERE tenant_id = ? AND clave = 'bot_paused'").bind(bsTenant.id).first();
+        return new Response(JSON.stringify({ success: true, bot_paused: bsRow?.valor === "true", business_name: bsTenant.business_name }), {
           headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
         });
       }
@@ -2494,11 +2547,12 @@ Lamentamos las molestias. Para m\xE1s informaci\xF3n o reagendar, contacte direc
         const tenants = tenantsRes.results || [];
         const out = [];
         for (const t of tenants) {
-          const [c1, c2, c3, c4] = await Promise.all([
+          const [c1, c2, c3, c4, c5] = await Promise.all([
             env2.DB.prepare("SELECT COUNT(*) as c FROM sgc_cit_Citas WHERE tenant_id = ?").bind(t.id).first().catch(() => ({ c: 0 })),
             env2.DB.prepare("SELECT COUNT(*) as c FROM sgc_cit_Citas WHERE tenant_id = ? AND estado_aprobacion = 'pendiente'").bind(t.id).first().catch(() => ({ c: 0 })),
             env2.DB.prepare("SELECT COUNT(*) as c FROM sgc_cit_servicios_unificados WHERE tenant_id = ? AND activo = 1").bind(t.id).first().catch(() => ({ c: 0 })),
-            env2.DB.prepare("SELECT COUNT(*) as c FROM sgc_cit_WhatsApp_conversations WHERE tenant_id = ?").bind(t.id).first().catch(() => ({ c: 0 }))
+            env2.DB.prepare("SELECT COUNT(*) as c FROM sgc_cit_WhatsApp_conversations WHERE tenant_id = ?").bind(t.id).first().catch(() => ({ c: 0 })),
+            env2.DB.prepare("SELECT valor FROM sgc_cit_config WHERE tenant_id = ? AND clave = 'bot_paused'").bind(t.id).first().catch(() => null)
           ]);
           out.push({
             id: t.id,
@@ -2512,6 +2566,7 @@ Lamentamos las molestias. Para m\xE1s informaci\xF3n o reagendar, contacte direc
             created_at: t.created_at,
             approved_at: t.approved_at,
             active_at: t.active_at,
+            bot_paused: c5?.valor === "true",
             kpis: {
               citas_total: c1?.c || 0,
               citas_pendientes: c2?.c || 0,
@@ -2948,6 +3003,33 @@ Lamentamos las molestias. Para m\xE1s informaci\xF3n o reagendar, contacte direc
         return superAdminJson({ success: true, categorias: AUNCLICK_CATEGORIAS });
       }
 
+      // ============================================================
+      // MEJORA ON/OFF: Pausar / Reactivar bot de un tenant (super admin)
+      // ============================================================
+      const saPauseMatch = path.match(/^\/api\/superadmin\/tenants\/([^/]+)\/pause$/);
+      if (saPauseMatch && request.method === "POST") {
+        if (!superAdminCheckAuth(request, url)) return superAdminUnauthorized();
+        const slug = decodeURIComponent(saPauseMatch[1]);
+        const tenant = await env2.DB.prepare("SELECT id, business_name FROM tenants WHERE slug = ?").bind(slug).first();
+        if (!tenant) return superAdminJson({ success: false, error: "Tenant no encontrado" }, 404);
+        await env2.DB.prepare(
+          "INSERT OR REPLACE INTO sgc_cit_config (tenant_id, clave, valor) VALUES (?, 'bot_paused', 'true')"
+        ).bind(tenant.id).run();
+        return superAdminJson({ success: true, bot_paused: true, message: `Bot pausado para ${tenant.business_name}` });
+      }
+
+      const saResumeMatch = path.match(/^\/api\/superadmin\/tenants\/([^/]+)\/resume$/);
+      if (saResumeMatch && request.method === "POST") {
+        if (!superAdminCheckAuth(request, url)) return superAdminUnauthorized();
+        const slug = decodeURIComponent(saResumeMatch[1]);
+        const tenant = await env2.DB.prepare("SELECT id, business_name FROM tenants WHERE slug = ?").bind(slug).first();
+        if (!tenant) return superAdminJson({ success: false, error: "Tenant no encontrado" }, 404);
+        await env2.DB.prepare(
+          "INSERT OR REPLACE INTO sgc_cit_config (tenant_id, clave, valor) VALUES (?, 'bot_paused', 'false')"
+        ).bind(tenant.id).run();
+        return superAdminJson({ success: true, bot_paused: false, message: `Bot reactivado para ${tenant.business_name}` });
+      }
+
       // === FIN SUPER ADMIN ENDPOINTS ===
 
       return env2.ASSETS.fetch(request);
@@ -3052,10 +3134,53 @@ async function handleWhatsAppWebhook(request, env2) {
     
     text = (text || "").trim();
     
+    // ===== MEJORA 17: Soporte para imágenes =====
+    // Si es imageMessage sin caption (o caption vacía), responder amablemente
+    if (!text && msg.imageMessage) {
+      console.log(`IMAGE received from ${phone} on tenant ${tenantId}, attempting LLaVA analysis`);
+      let aiImageDescription = null;
+      try {
+        const imgUrl = msg.imageMessage.url || null;
+        if (imgUrl) {
+          const imgRes = await fetch(imgUrl);
+          if (imgRes.ok) {
+            const imgBuf = await imgRes.arrayBuffer();
+            const imgBytes = [...new Uint8Array(imgBuf)];
+            const llavaRes = await env2.AI.run('@cf/llava/hf-llava-v1.5-2.6b', {
+              image: imgBytes,
+              prompt: "What do you see in this image? Is there a visible license plate (patente)? Describe briefly."
+            });
+            aiImageDescription = (llavaRes?.description || llavaRes?.response || "").slice(0, 300);
+            console.log(`LLaVA response: ${aiImageDescription}`);
+          }
+        }
+      } catch (e) {
+        console.log(`LLaVA image analysis failed: ${e.message}`);
+      }
+      let imageReply;
+      if (aiImageDescription && aiImageDescription.length > 5) {
+        imageReply = `\u{1F4F8} \u00a1Recib\u00ed tu imagen! Veo: ${aiImageDescription.slice(0, 200)}\n\n\u00bfEs de tu veh\u00edculo? \u00bfQuieres agendar una cita? Cu\u00e9ntame qu\u00e9 servicio necesitas y te ayudo. \u{1F642}`;
+      } else {
+        imageReply = "\u{1F4F8} \u00a1Recib\u00ed tu imagen! Por ahora solo puedo procesar texto en detalle. \u00bfPodr\u00edas escribirme qu\u00e9 necesitas? Por ejemplo: \"quiero agendar una cita para cambio de aceite\". \u{1F642}";
+      }
+      await enviarWhatsAppEvolution(env2, phone, imageReply);
+      return new Response("OK", { status: 200 });
+    }
+    
+    // ===== MEJORA 18: Soporte para notas de voz =====
+    // Si es audioMessage, responder amablemente (Workers AI Whisper solo soporta inglés)
+    if (!text && msg.audioMessage) {
+      console.log(`AUDIO/voice note received from ${phone} on tenant ${tenantId}`);
+      await enviarWhatsAppEvolution(env2, phone, 
+        "\u{1F3A4} \u00a1Recib\u00ed tu nota de voz! Por ahora solo puedo procesar mensajes de texto. \u00bfPodr\u00edas escribirme qu\u00e9 necesitas? Por ejemplo: \"quiero agendar una cita\". \u{1F642}"
+      );
+      return new Response("OK", { status: 200 });
+    }
+    
     // Si no es texto, responder amablemente
     if (!text) {
       await enviarWhatsAppEvolution(env2, phone, 
-        "👋 ¡Hola! Por ahora solo puedo procesar mensajes de texto. Escríbeme el servicio que necesitas y te ayudo a agendar tu cita."
+        "\u{1F44B} \u00a1Hola! Por ahora solo puedo procesar mensajes de texto. Escr\u00edbeme el servicio que necesitas y te ayudo a agendar tu cita."
       );
       return new Response("OK", { status: 200 });
     }

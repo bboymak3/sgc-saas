@@ -26,12 +26,27 @@
     .suggestion:hover { background: #22c55e; color: #fff; }
     
     .input-area { padding: 14px; background: #0a0a0a; border-top: 1px solid #2a2a2a; flex-shrink: 0; }
-    .input-form { display: flex; gap: 8px; max-width: 700px; margin: 0 auto; }
-    .input-form input { flex: 1; background: #1a1a1a; border: 1px solid #2a2a2a; color: #fff; padding: 12px; border-radius: 24px; font-size: 1rem; outline: none; }
-    .input-form input:focus { border-color: #22c55e; }
-    .input-form button { background: #16a34a; color: #fff; border: none; width: 44px; height: 44px; border-radius: 50%; cursor: pointer; font-size: 1.2rem; transition: background 0.2s; }
+    .input-form { display: flex; gap: 8px; max-width: 700px; margin: 0 auto; align-items: center; }
+    .input-form input[type="text"] { flex: 1; background: #1a1a1a; border: 1px solid #2a2a2a; color: #fff; padding: 12px; border-radius: 24px; font-size: 1rem; outline: none; }
+    .input-form input[type="text"]:focus { border-color: #22c55e; }
+    .input-form button { background: #16a34a; color: #fff; border: none; width: 44px; height: 44px; border-radius: 50%; cursor: pointer; font-size: 1.2rem; transition: background 0.2s; display: flex; align-items: center; justify-content: center; }
     .input-form button:hover { background: #15803d; }
     .input-form button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .input-form .icon-btn { background: #1a1a1a; border: 1px solid #2a2a2a; color: #e8e8e8; width: 44px; height: 44px; border-radius: 50%; cursor: pointer; font-size: 1.1rem; transition: all 0.2s; display: flex; align-items: center; justify-content: center; flex-shrink: 0; position: relative; overflow: hidden; }
+    .input-form .icon-btn:hover { border-color: #22c55e; color: #22c55e; }
+    .input-form .icon-btn.recording { background: #ef4444; border-color: #ef4444; color: #fff; animation: pulse 1.2s infinite; }
+    @keyframes pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.1); } }
+    .input-form .icon-btn.tts-on { background: #22c55e; border-color: #22c55e; color: #0a0a0a; }
+    .image-preview { max-width: 700px; margin: 0 auto 8px; padding: 6px; background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 12px; display: none; align-items: center; gap: 10px; }
+    .image-preview.show { display: flex; }
+    .image-preview img { width: 50px; height: 50px; object-fit: cover; border-radius: 8px; }
+    .image-preview .info { flex: 1; font-size: 0.85rem; color: #999; }
+    .image-preview .remove { background: transparent; border: none; color: #ef4444; cursor: pointer; font-size: 1.2rem; padding: 4px 8px; }
+    .listening-indicator { text-align: center; padding: 6px; color: #ef4444; font-size: 0.85rem; display: none; font-weight: 500; }
+    .listening-indicator.show { display: block; animation: pulse 1.2s infinite; }
+    .message.image-msg { padding: 4px; }
+    .message.image-msg img { max-width: 100%; border-radius: 8px; display: block; }
+    .unsupported-hint { font-size: 0.72rem; color: #666; text-align: center; padding: 4px; }
     
     .services-toggle { text-align: center; padding: 8px; color: #888; font-size: 0.85rem; cursor: pointer; }
     .services-toggle:hover { color: #22c55e; }
@@ -65,10 +80,21 @@
   <div class="input-area">
     <div class="services-toggle" id="servicesToggle">📋 Ver servicios</div>
     <div class="services-list" id="servicesList" style="display:none;"></div>
+    <div class="listening-indicator" id="listeningIndicator">🎤 Escuchando...</div>
+    <div class="image-preview" id="imagePreview">
+      <img id="imagePreviewImg" alt="preview">
+      <div class="info" id="imagePreviewInfo">Imagen lista para enviar</div>
+      <button type="button" class="remove" onclick="clearImage()">✕</button>
+    </div>
     <form class="input-form" id="chatForm">
+      <input type="file" id="imageInput" accept="image/*" style="display:none;">
+      <button type="button" class="icon-btn" id="imageBtn" title="Adjuntar imagen" disabled>📎</button>
+      <button type="button" class="icon-btn" id="micBtn" title="Dictar por voz" disabled>🎤</button>
+      <button type="button" class="icon-btn" id="ttsBtn" title="Leer respuestas en voz alta">🔊</button>
       <input type="text" id="messageInput" placeholder="Escribe tu mensaje..." autocomplete="off" disabled>
       <button type="submit" id="sendBtn" disabled>➤</button>
     </form>
+    <div class="unsupported-hint" id="unsupportedHint" style="display:none;">Nota: voz y TTS solo funcionan en Chrome/Edge.</div>
   </div>
   
   <script>
@@ -77,6 +103,130 @@
     const API_BASE = 'https://sgc-saas.activo.workers.dev';
     let messages = [];
     let isTyping = false;
+    let attachedImage = null; // base64 data URL string when image is attached
+    let ttsEnabled = false;
+    let recognition = null;
+    let isRecording = false;
+
+    // ===== MEJORA 17 (web): Image attachment =====
+    const imageInput = document.getElementById('imageInput');
+    const imageBtn = document.getElementById('imageBtn');
+    const imagePreview = document.getElementById('imagePreview');
+    const imagePreviewImg = document.getElementById('imagePreviewImg');
+    const imagePreviewInfo = document.getElementById('imagePreviewInfo');
+
+    imageBtn.addEventListener('click', () => imageInput.click());
+    imageInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      if (file.size > 4 * 1024 * 1024) {
+        alert('La imagen es demasiado grande (máx 4MB).');
+        imageInput.value = '';
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = () => {
+        attachedImage = reader.result;
+        imagePreviewImg.src = attachedImage;
+        const kb = Math.round(file.size / 1024);
+        imagePreviewInfo.textContent = `${file.name} (${kb} KB)`;
+        imagePreview.classList.add('show');
+      };
+      reader.readAsDataURL(file);
+    });
+    window.clearImage = function() {
+      attachedImage = null;
+      imageInput.value = '';
+      imagePreview.classList.remove('show');
+    };
+
+    // ===== MEJORA 18 (web): Mic button (SpeechRecognition) =====
+    const micBtn = document.getElementById('micBtn');
+    const ttsBtn = document.getElementById('ttsBtn');
+    const listeningIndicator = document.getElementById('listeningIndicator');
+    const unsupportedHint = document.getElementById('unsupportedHint');
+    const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const hasTTS = 'speechSynthesis' in window;
+    if (!SpeechRecognitionAPI || !hasTTS) {
+      unsupportedHint.style.display = 'block';
+      unsupportedHint.textContent = 'Nota: voz/TTS solo funcionan en Chrome/Edge. ' + (!SpeechRecognitionAPI ? 'Micrófono no soportado. ' : '') + (!hasTTS ? 'TTS no soportado.' : '');
+    }
+    if (SpeechRecognitionAPI) {
+      recognition = new SpeechRecognitionAPI();
+      recognition.lang = 'es-ES';
+      recognition.interimResults = false;
+      recognition.maxAlternatives = 1;
+      recognition.continuous = false;
+      recognition.onresult = (event) => {
+        const transcript = event.results[0][0].transcript;
+        document.getElementById('messageInput').value = transcript;
+        document.getElementById('messageInput').focus();
+      };
+      recognition.onerror = (event) => {
+        console.warn('SpeechRecognition error:', event.error);
+        showToast('Error de micrófono: ' + event.error);
+      };
+      recognition.onend = () => {
+        isRecording = false;
+        micBtn.classList.remove('recording');
+        listeningIndicator.classList.remove('show');
+      };
+      micBtn.addEventListener('click', () => {
+        if (!SpeechRecognitionAPI) return;
+        if (isRecording) {
+          recognition.stop();
+        } else {
+          try {
+            recognition.start();
+            isRecording = true;
+            micBtn.classList.add('recording');
+            listeningIndicator.classList.add('show');
+          } catch (e) {
+            console.warn('mic start failed', e);
+          }
+        }
+      });
+    }
+
+    // ===== TTS toggle =====
+    ttsBtn.addEventListener('click', () => {
+      if (!hasTTS) return;
+      ttsEnabled = !ttsEnabled;
+      if (ttsEnabled) {
+        ttsBtn.classList.add('tts-on');
+        showToast('🔊 TTS activado');
+      } else {
+        ttsBtn.classList.remove('tts-on');
+        speechSynthesis.cancel();
+        showToast('🔇 TTS desactivado');
+      }
+    });
+
+    function speak(text) {
+      if (!ttsEnabled || !hasTTS) return;
+      try {
+        speechSynthesis.cancel();
+        const clean = text.replace(/[\*_#>`]/g, '').slice(0, 500);
+        const u = new SpeechSynthesisUtterance(clean);
+        u.lang = 'es-ES';
+        u.rate = 1.0;
+        speechSynthesis.speak(u);
+      } catch (e) {}
+    }
+
+    function showToast(msg) {
+      let t = document.getElementById('toastMsg');
+      if (!t) {
+        t = document.createElement('div');
+        t.id = 'toastMsg';
+        t.style.cssText = 'position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:#1a1a1a;border:1px solid #2a2a2a;color:#e8e8e8;padding:10px 18px;border-radius:999px;font-size:0.85rem;z-index:200;box-shadow:0 4px 20px rgba(0,0,0,0.5);transition:opacity 0.2s;opacity:0;pointer-events:none;';
+        document.body.appendChild(t);
+      }
+      t.textContent = msg;
+      t.style.opacity = '1';
+      clearTimeout(t._timer);
+      t._timer = setTimeout(() => { t.style.opacity = '0'; }, 2500);
+    }
     
     async function init() {
       try {
@@ -104,6 +254,8 @@
         // Enable input
         document.getElementById('messageInput').disabled = false;
         document.getElementById('sendBtn').disabled = false;
+        document.getElementById('imageBtn').disabled = false;
+        if (SpeechRecognitionAPI) document.getElementById('micBtn').disabled = false;
         document.getElementById('messageInput').focus();
         
         // Show suggestions
@@ -132,11 +284,19 @@
     }
     
     async function sendMessage(text) {
-      if (!text || isTyping) return;
+      if ((!text && !attachedImage) || isTyping) return;
       isTyping = true;
-      
-      addMessage('user', text);
-      messages.push({ role: 'user', content: text });
+      const sendImage = attachedImage;
+      const finalText = text || (sendImage ? '(imagen adjunta)' : '');
+      if (finalText) addMessage('user', finalText);
+      if (sendImage) {
+        // Show image in chat as user message
+        const imgDiv = document.createElement('div');
+        imgDiv.className = 'message user image-msg';
+        imgDiv.innerHTML = `<img src="${sendImage}" alt="imagen adjunta">`;
+        document.getElementById('chatContainer').appendChild(imgDiv);
+      }
+      messages.push({ role: 'user', content: finalText });
       
       // Typing indicator
       const typingDiv = document.createElement('div');
@@ -148,12 +308,15 @@
       
       document.getElementById('messageInput').value = '';
       document.getElementById('sendBtn').disabled = true;
+      clearImage();
       
       try {
+        const reqBody = { messages };
+        if (sendImage) reqBody.image = sendImage;
         const res = await fetch(`${API_BASE}/api/chat?t=${slug}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ messages })
+          body: JSON.stringify(reqBody)
         });
         
         document.getElementById('typingIndicator')?.remove();
@@ -204,6 +367,7 @@
         }
         
         messages.push({ role: 'assistant', content: botText });
+        speak(botText);
       } catch (e) {
         document.getElementById('typingIndicator')?.remove();
         addMessage('bot', 'Error de conexión. Intenta de nuevo.');

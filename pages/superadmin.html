@@ -211,6 +211,44 @@
     .status-badge.suspended { background: rgba(102,102,102,0.15); color: var(--text-dim); border: 1px solid rgba(102,102,102,0.4); }
     .status-badge::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
 
+    /* ===== MEJORA ON/OFF: Toggle switch iOS-style ===== */
+    .tenant-card.bot-paused {
+      background: linear-gradient(180deg, rgba(239,68,68,0.04), var(--bg-1));
+      border-left-width: 3px;
+      border-left-color: var(--danger) !important;
+      opacity: 0.92;
+    }
+    .tenant-head .right-col {
+      display: flex; flex-direction: column; align-items: flex-end; gap: 8px;
+      flex-shrink: 0;
+    }
+    .bot-toggle-wrap {
+      display: flex; align-items: center; gap: 8px; cursor: pointer;
+      padding: 4px 8px; border-radius: 999px; transition: background 0.15s;
+    }
+    .bot-toggle-wrap:hover { background: var(--bg-2); }
+    .bot-toggle-wrap .toggle-label {
+      font-size: 0.72rem; font-weight: 800; letter-spacing: 0.5px;
+      text-transform: uppercase; min-width: 24px; text-align: right;
+    }
+    .bot-toggle-wrap .toggle-label.on { color: var(--primary); }
+    .bot-toggle-wrap .toggle-label.off { color: var(--text-dim); }
+    .toggle {
+      position: relative; width: 42px; height: 24px; background: var(--bg-3);
+      border-radius: 999px; transition: background 0.25s; flex-shrink: 0;
+      border: 1px solid var(--border-light);
+    }
+    .toggle.on { background: var(--primary); border-color: var(--primary-dark); }
+    .toggle .knob {
+      position: absolute; top: 1px; left: 1px; width: 20px; height: 20px;
+      background: #fff; border-radius: 50%; transition: transform 0.25s;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+    }
+    .toggle.on .knob { transform: translateX(18px); }
+    .bot-toggle-wrap.loading { opacity: 0.5; pointer-events: none; }
+    .bot-toggle-wrap.loading .toggle { animation: pulseToggle 1s infinite; }
+    @keyframes pulseToggle { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+
     .tenant-meta-grid {
       display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
       gap: 10px; margin: 12px 0;
@@ -966,9 +1004,11 @@
         const created = t.created_at ? new Date(t.created_at.replace(' ', 'T') + 'Z').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
         const waDisplay = t.whatsapp_number ? formatPhone(t.whatsapp_number) : '—';
         const evoInstance = t.evolution_instance ? `<span title="${escapeHtml(t.evolution_instance)}">${escapeHtml(t.evolution_instance)}</span>` : '<span class="muted">no creada</span>';
+        const botPaused = t.bot_paused === true;
+        const toggleOn = !botPaused;
 
         return `
-          <div class="tenant-card ${status}" style="animation-delay:${i * 0.03}s">
+          <div class="tenant-card ${status} ${botPaused ? 'bot-paused' : ''}" style="animation-delay:${i * 0.03}s" data-slug="${escapeAttr(t.slug)}">
             <div class="tenant-head">
               <div class="left">
                 <div class="rubro-icon">${icon}</div>
@@ -977,7 +1017,13 @@
                   <div class="meta">${escapeHtml(t.rubro || 'otro')} · slug: <code>${escapeHtml(t.slug)}</code></div>
                 </div>
               </div>
-              <span class="status-badge ${status}">${statusLabel}</span>
+              <div class="right-col">
+                <div class="bot-toggle-wrap" id="toggle-${escapeAttr(t.slug)}" onclick="toggleBot('${escapeAttr(t.slug)}', ${botPaused ? 'true' : 'false'})" title="${botPaused ? 'Reactivar bot' : 'Pausar bot'}">
+                  <span class="toggle-label ${toggleOn ? 'on' : 'off'}">${toggleOn ? 'ON' : 'OFF'}</span>
+                  <div class="toggle ${toggleOn ? 'on' : ''}"><div class="knob"></div></div>
+                </div>
+                <span class="status-badge ${status}">${statusLabel}</span>
+              </div>
             </div>
             <div class="tenant-meta-grid">
               <div class="meta-cell">
@@ -1104,6 +1150,48 @@
         const btn = document.getElementById('confirmActionBtn');
         if (btn) btn.disabled = true;
       }, 50);
+    }
+
+    // ============================================================
+    // MEJORA ON/OFF: Toggle pause/resume bot per tenant
+    // ============================================================
+    async function toggleBot(slug, currentlyPaused) {
+      const wrap = document.getElementById(`toggle-${slug}`);
+      if (!wrap) return;
+      wrap.classList.add('loading');
+      const action = currentlyPaused ? 'resume' : 'pause';
+      const verb = currentlyPaused ? 'Reactivando' : 'Pausando';
+      showToast('info', `${verb} bot de ${slug}…`);
+      try {
+        const data = await apiPost(`/api/superadmin/tenants/${encodeURIComponent(slug)}/${action}`, {});
+        if (data.success) {
+          // Update local state
+          const t = tenants.find(x => x.slug === slug);
+          if (t) t.bot_paused = data.bot_paused;
+          // Update visual toggle without full reload
+          const card = document.querySelector(`.tenant-card[data-slug="${CSS.escape(slug)}"]`);
+          const isOn = !data.bot_paused;
+          if (wrap) {
+            const label = wrap.querySelector('.toggle-label');
+            const toggle = wrap.querySelector('.toggle');
+            if (label) {
+              label.textContent = isOn ? 'ON' : 'OFF';
+              label.className = `toggle-label ${isOn ? 'on' : 'off'}`;
+            }
+            if (toggle) toggle.className = `toggle ${isOn ? 'on' : ''}`;
+            wrap.setAttribute('onclick', `toggleBot('${slug.replace(/'/g, "\\'")}', ${data.bot_paused ? 'true' : 'false'})`);
+            wrap.setAttribute('title', data.bot_paused ? 'Reactivar bot' : 'Pausar bot');
+          }
+          if (card) card.classList.toggle('bot-paused', data.bot_paused);
+          showToast('success', data.message || (data.bot_paused ? `⏸️ Bot pausado para ${slug}` : `✅ Bot reactivado para ${slug}`));
+        } else {
+          showToast('error', 'Error: ' + (data.error || 'desconocido'));
+        }
+      } catch (err) {
+        showToast('error', 'Error de conexión: ' + err.message);
+      } finally {
+        if (wrap) wrap.classList.remove('loading');
+      }
     }
 
     // ============================================================
