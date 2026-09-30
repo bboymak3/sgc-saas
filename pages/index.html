@@ -864,18 +864,111 @@
             <input type="text" id="business_name" name="business_name" required placeholder="Ej: Barbería Don Juan">
           </div>
           <div class="form-group">
-            <label for="rubro">Rubro *</label>
+            <label for="rubro">Categoría de tu negocio *</label>
             <select id="rubro" name="rubro" required>
-              <option value="">Selecciona tu rubro</option>
-              <option value="taller">🔧 Taller Mecánico</option>
-              <option value="barberia">💈 Barbería</option>
-              <option value="clinica_dental">🦷 Clínica Dental</option>
-              <option value="salon_belleza">💅 Salón de Belleza</option>
-              <option value="veterinaria">🐾 Veterinaria</option>
-              <option value="spa">💆 Spa / Masajes</option>
-              <option value="fotografia">📸 Fotografía</option>
-              <option value="otro">💼 Otro</option>
+              <option value="">Selecciona tu categoría</option>
+              <optgroup label="Agropecuarios">
+                <option value="Insumos Agropecuarios">Insumos Agropecuarios</option>
+                <option value="Agricolas">Agricolas</option>
+                <option value="Maquinaria Agricola">Maquinaria Agricola</option>
+              </optgroup>
+              <optgroup label="Automotriz">
+                <option value="Auto Talleres">Auto Talleres</option>
+                <option value="Auto Repuestos">Auto Repuestos</option>
+                <option value="Auto Lavado">Auto Lavado</option>
+                <option value="Concesionarios">Concesionarios</option>
+                <option value="Motos">Motos</option>
+              </optgroup>
+              <optgroup label="Belleza y Cuidado Personal">
+                <option value="Ropas">Ropas</option>
+                <option value="Zapaterias">Zapaterias</option>
+                <option value="Joyerias">Joyerias</option>
+              </optgroup>
+              <optgroup label="Comida y Bebidas">
+                <option value="Restaurantes">Restaurantes</option>
+                <option value="Bares y Discotecas">Bares y Discotecas</option>
+                <option value="Cafeterias">Cafeterias</option>
+                <option value="Panaderias">Panaderias</option>
+                <option value="Supermercados">Supermercados</option>
+                <option value="Fruver">Fruver</option>
+                <option value="Heladerias">Heladerias</option>
+              </optgroup>
+              <optgroup label="Educacion">
+                <option value="Academias">Academias</option>
+                <option value="Colegios">Colegios</option>
+                <option value="Librerias">Librerias</option>
+                <option value="Universidades">Universidades</option>
+              </optgroup>
+              <optgroup label="Hogar y Construccion">
+                <option value="Ferreterias">Ferreterias</option>
+                <option value="Mueblerias">Mueblerias</option>
+                <option value="Electrodomesticos">Electrodomesticos</option>
+                <option value="Pinturas">Pinturas</option>
+                <option value="Cerrajerias">Cerrajerias</option>
+                <option value="Electricos">Electricos</option>
+              </optgroup>
+              <optgroup label="Salud y Bienestar">
+                <option value="Farmacias">Farmacias</option>
+                <option value="Clinicas y Hospitales">Clinicas y Hospitales</option>
+                <option value="Laboratorios">Laboratorios</option>
+                <option value="Opticas">Opticas</option>
+                <option value="Veterinarias">Veterinarias</option>
+                <option value="Gimnasios">Gimnasios</option>
+                <option value="Dentistas">Dentistas</option>
+                <option value="Naturistas">Naturistas</option>
+              </optgroup>
+              <optgroup label="Servicios Profesionales">
+                <option value="Inmobiliarias">Inmobiliarias</option>
+                <option value="Bufete de Abogados">Bufete de Abogados</option>
+                <option value="Juridicos">Juridicos</option>
+                <option value="Publicidad">Publicidad</option>
+                <option value="Fotografia">Fotografia</option>
+                <option value="Imprenta">Imprenta</option>
+                <option value="Tecnologia">Tecnologia</option>
+                <option value="Seguridad">Seguridad</option>
+              </optgroup>
+              <optgroup label="Servicios Varios">
+                <option value="General">General</option>
+                <option value="Pizzerias">Pizzerias</option>
+                <option value="Perfumerias">Perfumerias</option>
+                <option value="Barberias">Barberias</option>
+                <option value="Salon y Spa">Salon y Spa</option>
+                <option value="Transportes">Transportes</option>
+                <option value="Variedades">Variedades</option>
+                <option value="Domicilios">Domicilios</option>
+                <option value="Sublimacion">Sublimacion</option>
+                <option value="Lavanderias">Lavanderias</option>
+                <option value="Desechables">Desechables</option>
+                <option value="Bicicletas">Bicicletas</option>
+                <option value="Cámaras de Seguridad">Cámaras de Seguridad</option>
+                <option value="Colchones">Colchones</option>
+                <option value="Carniceria">Carniceria</option>
+                <option value="Charcuteria">Charcuteria</option>
+                <option value="Cocinas y Accesorios">Cocinas y Accesorios</option>
+                <option value="Confiteria">Confiteria</option>
+                <option value="Decoración">Decoración</option>
+                <option value="Energeticos">Energeticos</option>
+                <option value="Lubricantes">Lubricantes</option>
+                <option value="Maquinaria">Maquinaria</option>
+                <option value="Medicina Servicio Medico">Medicina Servicio Medico</option>
+                <option value="Otro">Otro</option>
+                <option value="Peluqueria">Peluqueria</option>
+                <option value="Potabilizadora de Agua">Potabilizadora de Agua</option>
+                <option value="Ropa Infantil">Ropa Infantil</option>
+                <option value="Suplementos">Suplementos</option>
+              </optgroup>
+              <optgroup label="Tiendas y Comercio">
+                <option value="Celulares">Celulares</option>
+                <option value="Entretenimiento y recreación">Entretenimiento y recreación</option>
+              </optgroup>
+              <optgroup label="Turismo y Hospedaje">
+                <option value="Hoteles y Posadas">Hoteles y Posadas</option>
+                <option value="Agencias de Viaje">Agencias de Viaje</option>
+                <option value="Artesanias">Artesanias</option>
+                <option value="Encomiendas">Encomiendas</option>
+              </optgroup>
             </select>
+            <div class="hint">Elige la categoría más cercana a tu negocio. Esto configura automáticamente los servicios y el comportamiento del bot.</div>
           </div>
           <div class="form-group">
             <label for="whatsapp_number">WhatsApp a conectar *</label>

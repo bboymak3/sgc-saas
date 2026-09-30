@@ -128,6 +128,24 @@
     }
     .btn-refresh:hover { background: var(--bg-3); color: #fff; }
 
+    /* ===== Responsive header (mobile-first) ===== */
+    @media (max-width: 720px) {
+      .container { padding: 0 14px; }
+      .header-inner { padding: 10px 0; gap: 8px; flex-wrap: wrap; }
+      .brand { gap: 8px; min-width: 0; flex: 1 1 auto; }
+      .logo-mark { width: 32px; height: 32px; border-radius: 8px; }
+      .logo-mark svg { width: 20px; height: 20px; }
+      .brand-text .brand-name { font-size: 1rem; }
+      .brand-text .tenant-name { font-size: 0.72rem; }
+      .header-actions { gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+      .btn-refresh, .btn-logout { padding: 6px 10px; font-size: 0.78rem; }
+    }
+    @media (max-width: 480px) {
+      .header-actions .btn-refresh,
+      .header-actions .btn-logout { padding: 6px 9px; font-size: 0.74rem; }
+      .brand-text .tenant-name { display: none; }
+    }
+
     /* ===== Stats grid ===== */
     .stats-grid {
       display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -283,6 +301,29 @@
     .btn.danger:hover { background: var(--danger); color: #fff; }
     .btn:disabled { opacity: 0.4; cursor: not-allowed; }
     .btn:disabled:hover { background: var(--bg-2); border-color: var(--border-light); color: var(--text); }
+    .btn.info { background: rgba(59,130,246,0.15); border-color: rgba(59,130,246,0.4); color: var(--info); }
+    .btn.info:hover { background: var(--info); color: #fff; }
+
+    /* ===== Responsive tenant cards (mobile) ===== */
+    @media (max-width: 600px) {
+      .tenant-card { padding: 14px; }
+      .tenant-head { flex-direction: column; align-items: stretch; gap: 10px; }
+      .tenant-head .right-col { flex-direction: row; align-items: center; justify-content: space-between; width: 100%; }
+      .tenant-meta-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+      .meta-cell { padding: 7px 9px; }
+      .meta-cell .value { font-size: 1rem; }
+      .actions-row .btn { font-size: 0.74rem; padding: 6px 9px; flex: 1 1 auto; justify-content: center; min-width: 0; }
+    }
+
+    /* Category badge shown on each tenant card */
+    .cat-badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: rgba(59,130,246,0.12); border: 1px solid rgba(59,130,246,0.35);
+      color: var(--info); padding: 4px 10px; border-radius: 999px;
+      font-size: 0.74rem; font-weight: 600; margin-top: 6px;
+      max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .cat-badge::before { content: "🏷️"; flex-shrink: 0; }
 
     /* ===== Loading / empty states ===== */
     .center-msg {
@@ -460,7 +501,6 @@
           </div>
         </div>
         <div class="header-actions">
-          <span class="refresh-pill"><span class="dot"></span>Auto-refresh 60s</span>
           <button class="btn-refresh" onclick="loadTenants()" title="Recargar ahora">↻ Refrescar</button>
           <button class="btn-refresh" onclick="openTemplatesModal()" title="Plantillas de prompt por categoría">📋 Plantillas</button>
           <button class="btn-logout" onclick="logout()">Cerrar sesión</button>
@@ -645,6 +685,37 @@
         <span style="flex:1;"></span>
         <button class="btn warn" id="tplApplyBtn" onclick="applyTemplateToTenants()" disabled>⚡ Aplicar a todos los negocios de esta categoría</button>
         <button class="btn primary" id="tplSaveBtn" onclick="saveTemplate()" disabled>💾 Guardar plantilla</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== CHANGE CATEGORIA MODAL (TAREA 3a) ===== -->
+  <div class="modal-overlay" id="categoriaModal">
+    <div class="modal">
+      <div class="modal-head">
+        <div>
+          <h3>🏷️ Cambiar categoría — <span id="categoriaTenantName"></span></h3>
+          <div class="sub">Cambia la categoría del negocio. Se aplicará automáticamente la plantilla de prompt correspondiente.</div>
+        </div>
+        <button class="modal-close" onclick="closeModal('categoriaModal')">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>Categoría actual</label>
+          <div id="categoriaActual" style="background:var(--bg-2);border:1px solid var(--border);padding:10px 12px;border-radius:10px;font-size:0.9rem;color:var(--text-muted);">—</div>
+        </div>
+        <div class="form-group">
+          <label for="categoriaSelect">Nueva categoría <span class="req">*</span></label>
+          <select id="categoriaSelect" required>
+            <option value="">— Selecciona una categoría —</option>
+          </select>
+          <div class="hint" style="font-size:0.78rem;color:var(--text-dim);margin-top:5px;">Al cambiar, se actualiza el rubro del negocio y se aplica la plantilla de prompt correspondiente (si no existe, se genera una por defecto).</div>
+        </div>
+        <div id="categoriaError" class="login-error"></div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn" onclick="closeModal('categoriaModal')">Cancelar</button>
+        <button class="btn primary" id="categoriaSaveBtn" onclick="saveCategoria()">💾 Cambiar categoría</button>
       </div>
     </div>
   </div>
@@ -951,6 +1022,71 @@
     }
 
     // ============================================================
+    // TAREA 3a: CAMBIO DE CATEGORÍA POR TENANT
+    // ============================================================
+    let categoriaModalInitialized = false;
+    let currentCategoriaSlug = null;
+
+    function openCategoriaModal(slug) {
+      const tenant = tenants.find(t => t.slug === slug);
+      if (!tenant) { showToast('error', 'Tenant no encontrado'); return; }
+      currentCategoriaSlug = slug;
+      document.getElementById('categoriaTenantName').textContent = tenant.business_name || slug;
+      document.getElementById('categoriaActual').textContent = tenant.rubro || '—';
+      document.getElementById('categoriaError').classList.remove('show');
+      const select = document.getElementById('categoriaSelect');
+      // Llenar dropdown solo la primera vez
+      if (!categoriaModalInitialized) {
+        let html = '<option value="">— Selecciona una categoría —</option>';
+        for (const grupo of AUNCLICK_CATEGORIAS) {
+          html += `<optgroup label="${escapeAttr(grupo.tipo)}">`;
+          for (const cat of grupo.categorias) {
+            html += `<option value="${escapeAttr(cat)}">${escapeHtml(cat)}</option>`;
+          }
+          html += '</optgroup>';
+        }
+        select.innerHTML = html;
+        categoriaModalInitialized = true;
+      }
+      // Pre-seleccionar la categoría actual si existe en la lista
+      select.value = '';
+      for (const opt of select.options) {
+        if (opt.value === (tenant.rubro || '')) { select.value = opt.value; break; }
+      }
+      openModal('categoriaModal');
+    }
+
+    async function saveCategoria() {
+      const errBox = document.getElementById('categoriaError');
+      const btn = document.getElementById('categoriaSaveBtn');
+      errBox.classList.remove('show');
+      if (!currentCategoriaSlug) return;
+      const nuevaCat = document.getElementById('categoriaSelect').value;
+      if (!nuevaCat) {
+        errBox.textContent = '❌ Selecciona una categoría';
+        errBox.classList.add('show');
+        return;
+      }
+      btn.disabled = true; btn.textContent = 'Guardando…';
+      try {
+        const data = await apiPut(`/api/superadmin/tenants/${encodeURIComponent(currentCategoriaSlug)}/categoria`, { categoria: nuevaCat });
+        if (data.success) {
+          showToast('success', `✅ ${data.message || 'Categoría actualizada'}`);
+          closeModal('categoriaModal');
+          await loadTenants();
+        } else {
+          errBox.textContent = '❌ ' + (data.error || 'Error al cambiar categoría');
+          errBox.classList.add('show');
+        }
+      } catch (err) {
+        errBox.textContent = '❌ Error: ' + err.message;
+        errBox.classList.add('show');
+      } finally {
+        btn.disabled = false; btn.textContent = '💾 Cambiar categoría';
+      }
+    }
+
+    // ============================================================
     // LOAD + RENDER TENANTS
     // ============================================================
     async function loadTenants() {
@@ -1014,7 +1150,8 @@
                 <div class="rubro-icon">${icon}</div>
                 <div class="info">
                   <h3>${escapeHtml(t.business_name)}</h3>
-                  <div class="meta">${escapeHtml(t.rubro || 'otro')} · slug: <code>${escapeHtml(t.slug)}</code></div>
+                  <div class="meta">slug: <code>${escapeHtml(t.slug)}</code></div>
+                  <span class="cat-badge" title="Categoría actual del negocio">${escapeHtml(t.rubro || 'otro')}</span>
                 </div>
               </div>
               <div class="right-col">
@@ -1062,6 +1199,7 @@
               <button class="btn" onclick="showQR('${escapeAttr(t.slug)}')" ${!t.evolution_instance ? 'disabled title="Sin instancia Evolution"' : ''}>📱 Ver QR</button>
               <button class="btn" onclick="showCitas('${escapeAttr(t.slug)}')">📅 Ver citas</button>
               <button class="btn primary" onclick="showCreateCita('${escapeAttr(t.slug)}')">➕ Crear cita</button>
+              <button class="btn info" onclick="openCategoriaModal('${escapeAttr(t.slug)}')" title="Cambiar la categoría del negocio">🏷️ Cambiar categoría</button>
               ${isPending ? `
                 <button class="btn warn" onclick="approveTenant('${escapeAttr(t.slug)}')">✅ Aprobar</button>
                 <button class="btn danger" onclick="rejectTenant('${escapeAttr(t.slug)}')">❌ Rechazar</button>

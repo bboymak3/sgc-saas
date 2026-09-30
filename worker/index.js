@@ -3030,6 +3030,95 @@ Lamentamos las molestias. Para m\xE1s informaci\xF3n o reagendar, contacte direc
         return superAdminJson({ success: true, bot_paused: false, message: `Bot reactivado para ${tenant.business_name}` });
       }
 
+      // ============================================================
+      // CAMBIO DE CATEGORÍA DE UN TENANT (con aplicación de plantilla)
+      // PUT /api/superadmin/tenants/<slug>/categoria
+      // body: { categoria: "barberias" }
+      // 1. UPDATE tenants SET rubro = ? WHERE slug = ?
+      // 2. Busca plantilla guardada para la categoría (tenant_id=0, clave=prompt_template_<slug>)
+      // 3. Si existe, la aplica al tenant (custom_prompt)
+      // 4. Si no existe, genera prompt default, lo guarda como plantilla, y lo aplica al tenant
+      // ============================================================
+      const saCategoriaMatch = path.match(/^\/api\/superadmin\/tenants\/([^/]+)\/categoria$/);
+      if (saCategoriaMatch && request.method === "PUT") {
+        if (!superAdminCheckAuth(request, url)) return superAdminUnauthorized();
+        const slug = decodeURIComponent(saCategoriaMatch[1]);
+        const tenant = await env2.DB.prepare("SELECT id, business_name, rubro FROM tenants WHERE slug = ?").bind(slug).first();
+        if (!tenant) return superAdminJson({ success: false, error: "Tenant no encontrado" }, 404);
+
+        const body = await request.json().catch(() => ({}));
+        const categoriaRaw = String(body.categoria || "").trim();
+        if (!categoriaRaw) {
+          return superAdminJson({ success: false, error: "El campo 'categoria' es requerido" }, 400);
+        }
+
+        const catSlug = slugifyCategoria(categoriaRaw);
+        const catClave = "prompt_template_" + catSlug;
+
+        // 1. Actualizar rubro del tenant
+        await env2.DB.prepare("UPDATE tenants SET rubro = ? WHERE slug = ?").bind(categoriaRaw, slug).run();
+
+        // 2. Buscar plantilla existente para la categoría (tenant_id=0)
+        let prompt = null;
+        let promptSource = null;
+        const tplRow = await env2.DB.prepare(
+          "SELECT valor FROM sgc_cit_config WHERE tenant_id = 0 AND clave = ?"
+        ).bind(catClave).first();
+        if (tplRow?.valor) {
+          try {
+            const parsed = JSON.parse(tplRow.valor);
+            prompt = parsed.prompt || (typeof parsed === "string" ? parsed : "");
+          } catch (e) {
+            prompt = tplRow.valor;
+          }
+          if (prompt) promptSource = "existing_template";
+        }
+
+        // 3. Si no existe, generar default y guardarlo como plantilla
+        if (!prompt) {
+          prompt = generateDefaultPromptForCategory(categoriaRaw);
+          promptSource = "default_generated";
+          try {
+            const valor = JSON.stringify({ categoria: categoriaRaw, prompt, updated_at: new Date().toISOString() });
+            await env2.DB.prepare(
+              "INSERT INTO sgc_cit_config (tenant_id, clave, valor) VALUES (0, ?, ?) ON CONFLICT(tenant_id, clave) DO UPDATE SET valor = ?"
+            ).bind(catClave, valor, valor).run();
+          } catch (e) {
+            console.error("Error guardando plantilla default para categoría:", e);
+          }
+        }
+
+        // 4. Aplicar el prompt al tenant (custom_prompt)
+        let appliedOk = false;
+        let applyError = null;
+        if (prompt) {
+          try {
+            await env2.DB.prepare(
+              "INSERT INTO sgc_cit_config (tenant_id, clave, valor) VALUES (?, 'custom_prompt', ?) ON CONFLICT(tenant_id, clave) DO UPDATE SET valor = ?"
+            ).bind(tenant.id, prompt, prompt).run();
+            appliedOk = true;
+          } catch (e) {
+            applyError = e.message;
+            console.error("Error aplicando prompt al tenant:", e);
+          }
+        }
+
+        return superAdminJson({
+          success: true,
+          message: appliedOk
+            ? "Categoría actualizada y plantilla aplicada"
+            : "Categoría actualizada (no se pudo aplicar la plantilla)",
+          slug,
+          tenant_id: tenant.id,
+          rubro_anterior: tenant.rubro,
+          rubro_nuevo: categoriaRaw,
+          categoria_slug: catSlug,
+          prompt_source: promptSource,
+          prompt_aplicado: appliedOk,
+          apply_error: applyError
+        });
+      }
+
       // === FIN SUPER ADMIN ENDPOINTS ===
 
       return env2.ASSETS.fetch(request);
@@ -4063,8 +4152,18 @@ __name(parseCitaFromHistory, "parseCitaFromHistory");
 // ============================================================
 // ADMIN COMMANDS (vía WhatsApp desde +584167775771)
 // ============================================================
+// IMPORTANTE: Los comandos PAUSAR / REACTIVAR / ESTADO / BL / DESB
+// del admin SIEMPRE afectan SOLO al tenant 1 (SGC, el negocio del
+// admin). El admin es dueño del tenant 1 y sus comandos de control
+// del bot NUNCA afectan a otros tenants, sin importar a qué negocio
+// se haya escrito el mensaje. Para controlar otros negocios, cada
+// dueño usa handleOwnerCommand desde su propio WhatsApp.
 async function handleAdminCommand(env2, body) {
   try {
+    // Tenant 1 = SGC (el negocio del admin). Hardcoded por seguridad:
+    // los comandos del admin nunca deben escapar a otros tenants.
+    const ADMIN_TENANT_ID = 1;
+
     const data = body.data || {};
     const key = data.key || {};
     const phone = (key.remoteJid || "").replace("@s.whatsapp.net", "");
@@ -4155,7 +4254,15 @@ async function handleAdminCommand(env2, body) {
         
         // Cargar servicios default según rubro
         await loadDefaultServices(env2, tenant.id, tenant.rubro || "taller");
-        
+
+        // Aplicar plantilla de prompt según el rubro (si existe, si no, se genera default)
+        let templateAppliedWa = null;
+        try {
+          templateAppliedWa = await applyTemplateOnApprove(env2, tenant.id, tenant.rubro || "otro");
+        } catch (e) {
+          console.error("Error aplicando plantilla on approve (WA):", e);
+        }
+
         reply = `✅ *Tenant aprobado: ${tenant.business_name}*\n\n`;
         reply += `Slug: ${slug}\n`;
         reply += `Rubro: ${tenant.rubro || "taller"}\n`;
@@ -4257,24 +4364,28 @@ async function handleAdminCommand(env2, body) {
       // PAUSAR sin argumento = pausar todo el bot
       // PAUSAR <número> = pausar un número específico
       if (slug) {
-        // Pausar número específico
+        // Pausar número específico — siempre en tenant 1 (SGC)
         const num = slug.replace(/[^0-9]/g, "");
-        const conv = await env2.DB.prepare(
-          "SELECT id, contact_name FROM sgc_cit_WhatsApp_conversations WHERE phone = ? AND tenant_id = ?"
-        ).bind(num, 1).first();
-        if (conv) {
-          await env2.DB.prepare(
-            "UPDATE sgc_cit_WhatsApp_conversations SET status = 'paused' WHERE id = ?"
-          ).bind(conv.id).run();
-          reply = `⏸️ Bot pausado para el número ${num} (${conv.contact_name || "sin nombre"}).\n\nYa no responderá a sus mensajes.\n\nPara reactivar: REACTIVAR ${num}`;
+        if (!num || num.length < 8) {
+          reply = `❌ Argumento inválido.\n\nUso:\n• *PAUSAR* — pausa todo el bot (SGC)\n• *PAUSAR <número>* — pausa un número en SGC\n\nEjemplo: *PAUSAR 56912345678*`;
         } else {
-          reply = `❌ No se encontró conversación con el número ${num}.`;
+          const conv = await env2.DB.prepare(
+            "SELECT id, contact_name FROM sgc_cit_WhatsApp_conversations WHERE phone = ? AND tenant_id = ?"
+          ).bind(num, ADMIN_TENANT_ID).first();
+          if (conv) {
+            await env2.DB.prepare(
+              "UPDATE sgc_cit_WhatsApp_conversations SET status = 'paused' WHERE id = ?"
+            ).bind(conv.id).run();
+            reply = `⏸️ Bot pausado para el número ${num} (${conv.contact_name || "sin nombre"}).\n\nYa no responderá a sus mensajes.\n\nPara reactivar: REACTIVAR ${num}`;
+          } else {
+            reply = `❌ No se encontró conversación con el número ${num} en SGC.`;
+          }
         }
       } else {
-        // Pausar todo el bot
+        // Pausar todo el bot — siempre tenant 1 (SGC)
         await env2.DB.prepare(
-          "INSERT OR REPLACE INTO sgc_cit_config (tenant_id, clave, valor) VALUES (1, 'bot_paused', 'true')"
-        ).run();
+          "INSERT OR REPLACE INTO sgc_cit_config (tenant_id, clave, valor) VALUES (?, 'bot_paused', 'true')"
+        ).bind(ADMIN_TENANT_ID).run();
         reply = `⏸️ *Bot PAUSADO*\n\nEl bot NO responderá a ningún mensaje nuevo.\n\nPara reactivar: REACTIVAR`;
       }
       await env2.DB.prepare(
@@ -4284,23 +4395,28 @@ async function handleAdminCommand(env2, body) {
       // REACTIVAR sin argumento = reactivar todo el bot
       // REACTIVAR <número> = reactivar un número específico
       if (slug) {
+        // Reactivar número específico — siempre en tenant 1 (SGC)
         const num = slug.replace(/[^0-9]/g, "");
-        const conv = await env2.DB.prepare(
-          "SELECT id, contact_name FROM sgc_cit_WhatsApp_conversations WHERE phone = ? AND tenant_id = ?"
-        ).bind(num, 1).first();
-        if (conv) {
-          await env2.DB.prepare(
-            "UPDATE sgc_cit_WhatsApp_conversations SET status = 'active' WHERE id = ?"
-          ).bind(conv.id).run();
-          reply = `✅ Bot reactivado para el número ${num}.\n\nYa volverá a responder sus mensajes.`;
+        if (!num || num.length < 8) {
+          reply = `❌ Argumento inválido.\n\nUso:\n• *REACTIVAR* — reactiva todo el bot (SGC)\n• *REACTIVAR <número>* — reactiva un número en SGC\n\nEjemplo: *REACTIVAR 56912345678*`;
         } else {
-          reply = `❌ No se encontró conversación con el número ${num}.`;
+          const conv = await env2.DB.prepare(
+            "SELECT id, contact_name FROM sgc_cit_WhatsApp_conversations WHERE phone = ? AND tenant_id = ?"
+          ).bind(num, ADMIN_TENANT_ID).first();
+          if (conv) {
+            await env2.DB.prepare(
+              "UPDATE sgc_cit_WhatsApp_conversations SET status = 'active' WHERE id = ?"
+            ).bind(conv.id).run();
+            reply = `✅ Bot reactivado para el número ${num}.\n\nYa volverá a responder sus mensajes.`;
+          } else {
+            reply = `❌ No se encontró conversación con el número ${num} en SGC.`;
+          }
         }
       } else {
-        // Reactivar todo el bot
+        // Reactivar todo el bot — siempre tenant 1 (SGC)
         await env2.DB.prepare(
-          "INSERT OR REPLACE INTO sgc_cit_config (tenant_id, clave, valor) VALUES (1, 'bot_paused', 'false')"
-        ).run();
+          "INSERT OR REPLACE INTO sgc_cit_config (tenant_id, clave, valor) VALUES (?, 'bot_paused', 'false')"
+        ).bind(ADMIN_TENANT_ID).run();
         reply = `✅ *Bot REACTIVADO*\n\nEl bot volverá a responder todos los mensajes.`;
       }
       await env2.DB.prepare(
@@ -4315,10 +4431,10 @@ async function handleAdminCommand(env2, body) {
         if (num.length < 8) {
           reply = `❌ Número inválido: ${num}\n\nDebe ser un número de teléfono (mínimo 8 dígitos).`;
         } else {
-          // Buscar si existe conversación
+          // Buscar si existe conversación — siempre en tenant 1 (SGC)
           const conv = await env2.DB.prepare(
-            "SELECT id, contact_name, status, phone FROM sgc_cit_WhatsApp_conversations WHERE phone = ? AND tenant_id = 1"
-          ).bind(num).first();
+            "SELECT id, contact_name, status, phone FROM sgc_cit_WhatsApp_conversations WHERE phone = ? AND tenant_id = ?"
+          ).bind(num, ADMIN_TENANT_ID).first();
           if (conv) {
             // Marcar como bloqueado
             await env2.DB.prepare(
@@ -4328,8 +4444,8 @@ async function handleAdminCommand(env2, body) {
           } else {
             // No existe conversación, crear registro bloqueado para que no responda si escribe
             await env2.DB.prepare(
-              "INSERT INTO sgc_cit_WhatsApp_conversations (phone, contact_name, status, tenant_id) VALUES (?, ?, 'blocked', 1)"
-            ).bind(num, "Bloqueado por admin").run();
+              "INSERT INTO sgc_cit_WhatsApp_conversations (phone, contact_name, status, tenant_id) VALUES (?, ?, 'blocked', ?)"
+            ).bind(num, "Bloqueado por admin", ADMIN_TENANT_ID).run();
             reply = `🚫 *Número bloqueado*\n\n📞 ${num}\n\nNo existe conversación previa, pero si escribe, el bot no responderá.\n\nPara desbloquear: *DESB ${num}*`;
           }
           await env2.DB.prepare(
@@ -4344,30 +4460,30 @@ async function handleAdminCommand(env2, body) {
       } else {
         const num = slug.replace(/[^0-9]/g, "");
         const conv = await env2.DB.prepare(
-          "SELECT id, contact_name, status, phone FROM sgc_cit_WhatsApp_conversations WHERE phone = ? AND tenant_id = 1"
-        ).bind(num).first();
+          "SELECT id, contact_name, status, phone FROM sgc_cit_WhatsApp_conversations WHERE phone = ? AND tenant_id = ?"
+        ).bind(num, ADMIN_TENANT_ID).first();
         if (conv) {
           await env2.DB.prepare(
             "UPDATE sgc_cit_WhatsApp_conversations SET status = 'active' WHERE id = ?"
           ).bind(conv.id).run();
           reply = `✅ *Número desbloqueado*\n\n📞 ${num} (${conv.contact_name || "sin nombre"})\n\nEl bot volverá a responder a este número.`;
         } else {
-          reply = `❌ No se encontró el número ${num}.`;
+          reply = `❌ No se encontró el número ${num} en SGC.`;
         }
         await env2.DB.prepare(
           "INSERT INTO admin_commands (command, slug, admin_phone, result) VALUES (?, ?, ?, ?)"
         ).bind("DESB", num, phone, "unblocked").run();
       }
     } else if (cmd === "ESTADO" || cmd === "STATUS") {
-      // Ver estado del bot
+      // Ver estado del bot — siempre tenant 1 (SGC)
       const pausedConfig = await env2.DB.prepare(
-        "SELECT valor FROM sgc_cit_config WHERE tenant_id = 1 AND clave = 'bot_paused'"
-      ).first();
+        "SELECT valor FROM sgc_cit_config WHERE tenant_id = ? AND clave = 'bot_paused'"
+      ).bind(ADMIN_TENANT_ID).first();
       const isPaused = pausedConfig?.valor === 'true';
       
       const blockedConv = await env2.DB.prepare(
-        "SELECT phone, contact_name, status FROM sgc_cit_WhatsApp_conversations WHERE tenant_id = 1 AND status IN ('paused','blocked') ORDER BY status, phone"
-      ).all();
+        "SELECT phone, contact_name, status FROM sgc_cit_WhatsApp_conversations WHERE tenant_id = ? AND status IN ('paused','blocked') ORDER BY status, phone"
+      ).bind(ADMIN_TENANT_ID).all();
       const blockedList = blockedConv.results || [];
       const pausedList = blockedList.filter(c => c.status === 'paused');
       const blockedOnlyList = blockedList.filter(c => c.status === 'blocked');
@@ -4967,7 +5083,9 @@ async function findTenantsByCategoria(env2, categoriaRaw) {
 __name(findTenantsByCategoria, "findTenantsByCategoria");
 
 // Aplica la plantilla de prompt al tenant recién aprobado (MEJORA 14 parte 6)
-// Si existe plantilla para el rubro del tenant, se copia a custom_prompt del tenant
+// Si existe plantilla para el rubro del tenant, se copia a custom_prompt del tenant.
+// Si NO existe, se genera un prompt default para esa categoría, se guarda como
+// plantilla (para futuros negocios del mismo rubro) y se aplica al tenant.
 async function applyTemplateOnApprove(env2, tenantId, rubro) {
   try {
     if (!tenantId || !rubro) return { applied: false, reason: "missing data" };
@@ -4976,19 +5094,40 @@ async function applyTemplateOnApprove(env2, tenantId, rubro) {
     const row = await env2.DB.prepare(
       "SELECT valor FROM sgc_cit_config WHERE tenant_id = 0 AND clave = ?"
     ).bind(clave).first();
-    if (!row?.valor) return { applied: false, reason: "no template for rubro" };
+
     let prompt = null;
-    try {
-      const parsed = JSON.parse(row.valor);
-      prompt = parsed.prompt || (typeof parsed === "string" ? parsed : "");
-    } catch (e) {
-      prompt = row.valor;
+    let promptSource = null;
+    if (row?.valor) {
+      try {
+        const parsed = JSON.parse(row.valor);
+        prompt = parsed.prompt || (typeof parsed === "string" ? parsed : "");
+      } catch (e) {
+        prompt = row.valor;
+      }
+      if (prompt) promptSource = "existing_template";
     }
+
+    // Si no hay plantilla guardada, generar default y guardarla como plantilla
+    if (!prompt) {
+      prompt = generateDefaultPromptForCategory(rubro);
+      promptSource = "default_generated";
+      try {
+        const valor = JSON.stringify({ categoria: rubro, prompt, updated_at: new Date().toISOString() });
+        await env2.DB.prepare(
+          "INSERT INTO sgc_cit_config (tenant_id, clave, valor) VALUES (0, ?, ?) ON CONFLICT(tenant_id, clave) DO UPDATE SET valor = ?"
+        ).bind(clave, valor, valor).run();
+      } catch (e) {
+        console.error("Error guardando plantilla default on approve:", e);
+      }
+    }
+
     if (!prompt) return { applied: false, reason: "empty prompt" };
+
+    // Aplicar el prompt al tenant (custom_prompt)
     await env2.DB.prepare(
       "INSERT INTO sgc_cit_config (tenant_id, clave, valor) VALUES (?, 'custom_prompt', ?) ON CONFLICT(tenant_id, clave) DO UPDATE SET valor = ?"
     ).bind(tenantId, prompt, prompt).run();
-    return { applied: true, slug, clave };
+    return { applied: true, slug, clave, prompt_source: promptSource };
   } catch (e) {
     console.error("Error en applyTemplateOnApprove:", e);
     return { applied: false, reason: "error: " + e.message };
