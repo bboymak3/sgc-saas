@@ -1632,8 +1632,13 @@ var index_default = {
           return `${i + 1}. ${s.nombre} \u2014 ${s.descripcion || "Servicio profesional"} \u2014 ${precioStr} (${s.categoria || "General"}, ~${s.duracion_minutos} min)`;
         }).join("\n");
         const systemPrompt = await getSystemPrompt(env2, chatTenantId, chatTenantName, serviciosText);
+        // Inyectar un mensaje user/assistant al inicio para reforzar la fecha
+        // (los modelos pequeños como Llama 3.2 3B respetan más el contexto conversacional que el system prompt)
+        const fechaRefuerzo = `[CONTEXTO IMPORTANTE - FECHA Y HORA ACTUAL: ${new Intl.DateTimeFormat("es-CL", { timeZone: chatTenant?.timezone || "America/Santiago", weekday: "long", year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date())}]`;
         const chatMessages = [
-          { role: "system", content: systemPrompt }
+          { role: "system", content: systemPrompt },
+          { role: "user", content: fechaRefuerzo + " ¿Qué día es hoy?" },
+          { role: "assistant", content: "Hoy es " + new Intl.DateTimeFormat("es-CL", { timeZone: chatTenant?.timezone || "America/Santiago", weekday: "long", year: "numeric", month: "long", day: "numeric" }).format(new Date()) + ". La hora actual es " + new Intl.DateTimeFormat("en-GB", { timeZone: chatTenant?.timezone || "America/Santiago", hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date()) + ". Entendido, usaré esta fecha para agendar citas." }
         ];
         for (const msg of messages) {
           if (msg.role !== "system") {
@@ -2170,6 +2175,38 @@ Lamentamos las molestias. Para m\xE1s informaci\xF3n o reagendar, contacte direc
         } catch (e) {
           return superAdminJson({ success: false, error: e.message }, 500);
         }
+      }
+
+      // ============================================================
+      // DEBUG: Ver system prompt de un tenant (superadmin only)
+      // GET /api/debug/system-prompt/<slug>?pwd=<superadmin_pwd>
+      // ============================================================
+      const saDebugPromptMatch = path.match(/^\/api\/debug\/system-prompt\/([^/]+)$/);
+      if (saDebugPromptMatch && request.method === "GET") {
+        if (!superAdminCheckAuth(request, url)) return superAdminUnauthorized();
+        const slug = decodeURIComponent(saDebugPromptMatch[1]);
+        const tenant = await env2.DB.prepare("SELECT * FROM tenants WHERE slug = ?").bind(slug).first();
+        if (!tenant) return superAdminJson({ success: false, error: "Tenant no encontrado" }, 404);
+
+        const serviciosResult = await env2.DB.prepare("SELECT nombre, descripcion, duracion_minutos, precio, categoria FROM sgc_cit_servicios_unificados WHERE activo = 1 AND tenant_id = ? ORDER BY orden ASC, id ASC").bind(tenant.id).all();
+        const serviciosText = (serviciosResult.results || []).map((s, i) => {
+          const precioStr = s.precio > 0 ? `$${s.precio.toLocaleString("es-CL")} (ref.)` : "Consultar precio";
+          return `${i + 1}. ${s.nombre} — ${s.descripcion || "Servicio profesional"} — ${precioStr}`;
+        }).join("\n");
+
+        const prompt = await buildWhatsAppSystemPrompt(env2, tenant.id, serviciosText, { client_context: null, phone: null }, "TestUser", tenant.business_name, tenant.business_phone);
+
+        return superAdminJson({
+          success: true,
+          slug,
+          tenant_id: tenant.id,
+          tenant_name: tenant.business_name,
+          timezone: tenant.timezone,
+          pais: tenant.pais,
+          system_prompt: prompt,
+          system_prompt_length: prompt.length,
+          first_500_chars: prompt.substring(0, 500)
+        });
       }
 
       // ============================================================
@@ -4158,9 +4195,21 @@ async function handleWhatsAppWebhook(request, env2) {
     }).join("\n");
     
     const systemPrompt = await buildWhatsAppSystemPrompt(env2, tenantId, serviciosText, conversation, pushName, tenantName, tenantPhone);
-    
+
+    // Reforzar la fecha inyectando un mensaje user/assistant al inicio del contexto
+    // (los modelos pequeños como Llama 3.2 3B respetan más el contexto conversacional que el system prompt)
+    const tenantRow = await env2.DB.prepare("SELECT timezone, pais FROM tenants WHERE id = ?").bind(tenantId).first();
+    const waTz = tenantRow?.timezone || "America/Santiago";
+    const waFechaActual = new Intl.DateTimeFormat("es-CL", { timeZone: waTz, weekday: "long", year: "numeric", month: "long", day: "numeric" }).format(new Date());
+    const waHoraActual = new Intl.DateTimeFormat("en-GB", { timeZone: waTz, hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date());
+    const waFechaISO = new Intl.DateTimeFormat("en-CA", { timeZone: waTz, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+
     // 4. Llamar a Llama 3.2 3B CON function calling
-    const chatMessages = [{ role: "system", content: systemPrompt }];
+    const chatMessages = [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: `[CONTEXTO DEL SISTEMA - FECHA ACTUAL: ${waFechaActual} (${waFechaISO}). HORA ACTUAL: ${waHoraActual}. Zona horaria: ${waTz}. Usa esta fecha para agendar citas. NUNCA agendes en fechas pasadas.]` },
+      { role: "assistant", content: `Entendido. Hoy es ${waFechaActual} (${waFechaISO}), hora ${waHoraActual} (${waTz}). Usaré esta fecha para cualquier agendamiento.` }
+    ];
     for (const h of history) {
       chatMessages.push(h);
     }
@@ -4424,6 +4473,71 @@ Si necesitas reprogramar, escribenos por aqui \u{1F60A}`;
 __name(handleWhatsAppWebhook, "handleWhatsAppWebhook");
 
 async function buildWhatsAppSystemPrompt(env2, tenantId, serviciosText, conversation, pushName, tenantName, tenantPhone) {
+  // Cargar datos del tenant (timezone, pais, rubro, bot_name)
+  let tenantTz = "America/Santiago";
+  let tenantPais = "CL";
+  let tenantPaisNombre = "Chile";
+  let tenantRubro = "taller";
+  let botName = "Sofi";
+  let customPromptValor = null;
+  if (env2 && env2.DB && tenantId) {
+    try {
+      const tRow = await env2.DB.prepare(
+        "SELECT timezone, pais, rubro FROM tenants WHERE id = ?"
+      ).bind(tenantId).first();
+      if (tRow) {
+        tenantTz = tRow.timezone || "America/Santiago";
+        tenantPais = tRow.pais || "CL";
+        tenantPaisNombre = countryToName(tenantPais);
+        tenantRubro = tRow.rubro || "taller";
+      }
+    } catch (e) {
+      console.error("Error cargando tenant en buildWhatsAppSystemPrompt:", e);
+    }
+    try {
+      const botNameCfg = await env2.DB.prepare(
+        "SELECT valor FROM sgc_cit_config WHERE tenant_id = ? AND clave = 'bot_name'"
+      ).bind(tenantId).first();
+      if (botNameCfg?.valor) botName = botNameCfg.valor;
+    } catch (e) {}
+    try {
+      const customPrompt = await env2.DB.prepare(
+        "SELECT valor FROM sgc_cit_config WHERE tenant_id = ? AND clave = 'custom_prompt'"
+      ).bind(tenantId).first();
+      if (customPrompt?.valor) customPromptValor = customPrompt.valor;
+    } catch (e) {}
+  }
+
+  // Calcular fecha/hora actual en timezone del tenant
+  const now = new Date();
+  const fmtDate = new Intl.DateTimeFormat("en-CA", { timeZone: tenantTz, year: "numeric", month: "2-digit", day: "2-digit" });
+  const fmtTime = new Intl.DateTimeFormat("en-GB", { timeZone: tenantTz, hour: "2-digit", minute: "2-digit", hour12: false });
+  const fmtWeekday = new Intl.DateTimeFormat("es-CL", { timeZone: tenantTz, weekday: "long" });
+  const hoyStr = fmtDate.format(now);
+  const horaStr = fmtTime.format(now);
+  const diaHoy = fmtWeekday.format(now);
+  // Calcular mañana
+  const tzOffset = new Date(now.toLocaleString("en-US", { timeZone: tenantTz })).getTime() - now.getTime();
+  const tzNow = new Date(now.getTime() + tzOffset);
+  const maniana = new Date(tzNow);
+  maniana.setDate(maniana.getDate() + 1);
+  const manianaStr = fmtDate.format(maniana);
+  const manianaDia = fmtWeekday.format(maniana);
+
+  // Bloque de FECHA/HORA que se inyectará al PRINCIPIO del prompt
+  const fechaBloque = `FECHA Y HORA ACTUAL (${tenantPaisNombre}, ${tenantTz}):
+- HOY ES: ${diaHoy} ${hoyStr} (${hoyStr})
+- HORA ACTUAL: ${horaStr}
+- MAÑANA SERÁ: ${manianaDia} ${manianaStr} (${manianaStr})
+- Tu zona horaria es ${tenantTz}.
+
+REGLAS CRÍTICAS DE FECHA Y HORA:
+- NUNCA agendes una cita en una fecha pasada. La fecha mínima es HOY (${hoyStr}).
+- Si el cliente pide "hoy", usa ${hoyStr}. Si pide "mañana", usa ${manianaStr}.
+- Si el cliente dice "el lunes" sin fecha, calcula el próximo lunes desde HOY (${hoyStr}).
+- NUNCA inventes fechas. Si tienes dudas, pregunta "¿Para qué fecha te gustaría? Hoy es ${hoyStr}".
+`;
+
   // TAREA 5: Cargar productos y estado premium del tenant
   let productosText = "";
   let premiumProductsEnabled = false;
@@ -4436,7 +4550,7 @@ async function buildWhatsAppSystemPrompt(env2, tenantId, serviciosText, conversa
       if (prods.length > 0) {
         productosText = prods.map((p, i) => {
           const precioStr = p.precio > 0 ? `$${Number(p.precio).toLocaleString("es-CL")}` : "Consultar precio";
-          return `${i + 1}. ${p.nombre}${p.categoria ? ` (${p.categoria})` : ""} — ${p.descripcion || "Sin descripci\u00f3n"} — ${precioStr}`;
+          return `${i + 1}. ${p.nombre}${p.categoria ? ` (${p.categoria})` : ""} — ${p.descripcion || "Sin descripción"} — ${precioStr}`;
         }).join("\n");
       }
     } catch (e) {
@@ -4451,59 +4565,35 @@ async function buildWhatsAppSystemPrompt(env2, tenantId, serviciosText, conversa
       console.error("Error cargando premium_products_enabled en buildWhatsAppSystemPrompt:", e);
     }
   }
-  // Cargar prompt personalizado del tenant si existe
-  if (env2 && env2.DB && tenantId) {
-    try {
-      const customPrompt = await env2.DB.prepare(
-        "SELECT valor FROM sgc_cit_config WHERE tenant_id = ? AND clave = 'custom_prompt'"
-      ).bind(tenantId).first();
-      if (customPrompt?.valor) {
-        let botName = "Sofi";
-        try {
-          const botNameCfg = await env2.DB.prepare(
-            "SELECT valor FROM sgc_cit_config WHERE tenant_id = ? AND clave = 'bot_name'"
-          ).bind(tenantId).first();
-          if (botNameCfg?.valor) botName = botNameCfg.valor;
-        } catch (e) {}
-        let clientContext = "Nuevo cliente";
-        if (conversation?.client_context) {
-          try {
-            const ctx = JSON.parse(conversation.client_context);
-            const parts = [];
-            if (ctx.nombre) parts.push("Nombre: " + ctx.nombre);
-            if (ctx.patente) parts.push("Patente: " + ctx.patente);
-            if (ctx.marca) parts.push("Vehiculo: " + ctx.marca + " " + (ctx.modelo || ""));
-            if (parts.length > 0) clientContext = "Cliente conocido:\n" + parts.join("\n");
-          } catch (e) {}
-        }
-        let custom = customPrompt.valor
-          .replace(/\{business_name\}/g, tenantName || env2.BUSINESS_NAME || "")
-          .replace(/\{bot_name\}/g, botName)
-          .replace(/\{servicios\}/g, serviciosText || "")
-          .replace(/\{productos\}/g, productosText || "")
-          .replace(/\{push_name\}/g, pushName || "desconocido")
-          .replace(/\{phone\}/g, conversation?.phone || "")
-          .replace(/\{tenant_phone\}/g, tenantPhone || env2.BUSINESS_PHONE || "")
-          .replace(/\{client_context\}/g, clientContext);
-        return custom;
-      }
-    } catch (e) {
-      console.error("Error cargando custom_prompt en buildWhatsAppSystemPrompt:", e);
+
+  // Si existe custom_prompt, usarlo PERO inyectar el bloque de fecha al PRINCIPIO
+  if (customPromptValor) {
+    let clientContext = "Nuevo cliente";
+    if (conversation?.client_context) {
+      try {
+        const ctx = JSON.parse(conversation.client_context);
+        const parts = [];
+        if (ctx.nombre) parts.push("Nombre: " + ctx.nombre);
+        if (ctx.patente) parts.push("Patente: " + ctx.patente);
+        if (ctx.marca) parts.push("Vehiculo: " + ctx.marca + " " + (ctx.modelo || ""));
+        if (parts.length > 0) clientContext = "Cliente conocido:\n" + parts.join("\n");
+      } catch (e) {}
     }
+    let custom = customPromptValor
+      .replace(/\{business_name\}/g, tenantName || env2.BUSINESS_NAME || "")
+      .replace(/\{bot_name\}/g, botName)
+      .replace(/\{servicios\}/g, serviciosText || "")
+      .replace(/\{productos\}/g, productosText || "")
+      .replace(/\{push_name\}/g, pushName || "desconocido")
+      .replace(/\{phone\}/g, conversation?.phone || "")
+      .replace(/\{tenant_phone\}/g, tenantPhone || env2.BUSINESS_PHONE || "")
+      .replace(/\{client_context\}/g, clientContext)
+      .replace(/\{pais\}/g, tenantPaisNombre)
+      .replace(/\{timezone\}/g, tenantTz);
+    // Inyectar bloque de fecha al PRINCIPIO
+    return fechaBloque + "\n" + custom;
   }
-  const now = new Date();
-  const tz = "America/Santiago";
-  const fmtDate = new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" });
-  const fmtWeekday = new Intl.DateTimeFormat("es-CL", { timeZone: tz, weekday: "long" });
-  const hoyStr = fmtDate.format(now);
-  const diaHoy = fmtWeekday.format(now);
-  const tzOffset = new Date(now.toLocaleString("en-US", { timeZone: tz })).getTime() - now.getTime();
-  const chileNow = new Date(now.getTime() + tzOffset);
-  const maniana = new Date(chileNow);
-  maniana.setDate(maniana.getDate() + 1);
-  const manianaStr = fmtDate.format(maniana);
-  const manianaDia = fmtWeekday.format(maniana);
-  
+
   let clientContext = "Nuevo cliente";
   if (conversation.client_context) {
     try {
@@ -4515,10 +4605,11 @@ async function buildWhatsAppSystemPrompt(env2, tenantId, serviciosText, conversa
       if (parts.length > 0) clientContext = "Cliente conocido:\n" + parts.join("\n");
     } catch (e) {}
   }
-  
-  return `Eres el asistente virtual de WhatsApp de ${tenantName || env2.BUSINESS_NAME}, un taller mecanico en Chile. Te llamas Sofi.
 
-HOY ES: ${diaHoy} ${hoyStr}. Manana: ${manianaDia} ${manianaStr}.
+  return `${fechaBloque}
+
+Eres el asistente virtual de WhatsApp de ${tenantName || env2.BUSINESS_NAME}, un negocio de ${tenantRubro} en ${tenantPaisNombre}. Te llamas ${botName}.
+
 HORARIO: Lunes a Viernes 8:00-18:00, Sabados 9:00-14:00, Domingo cerrado.
 
 SERVICIOS DISPONIBLES (precios referenciales):
@@ -4527,7 +4618,7 @@ ${serviciosText}
 TU PERSONALIDAD:
 - Cercana, amable y profesional. Eres como una recepcionista eficiente pero calida
 - Saluda siempre al inicio: "Hola {nombre}! 👋" si sabes el nombre del cliente
-- Usa "tú" (trato informal chileno, no "usted")
+- Usa "tú" (trato informal, no "usted")
 - Muestra emocion genuina: "Genial!", "Perfecto!", "Claro que si!"
 - Si el cliente se confunde, ayudalo con paciencia, no lo apures
 - Si algo no se puede, ofrece alternativas ("no tengo ese horario, pero tengo a las 11 o 15, cual te queda mejor?")
@@ -5516,7 +5607,7 @@ __name(handleAdminCommand, "handleAdminCommand");
 async function handleOnboardingRegister(request, env2) {
   try {
     const body = await request.json();
-    const { business_name, rubro, whatsapp_number, email } = body;
+    const { business_name, rubro, whatsapp_number, email, country_code } = body;
     
     if (!business_name || !whatsapp_number) {
       return new Response(JSON.stringify({ 
@@ -5527,6 +5618,23 @@ async function handleOnboardingRegister(request, env2) {
         headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" }
       });
     }
+    
+    // Normalizar teléfono según país (quita +, espacios, 0 inicial, y prependa el country code)
+    const normalizedPhone = normalizePhoneByCountry(whatsapp_number, country_code);
+    if (!normalizedPhone || normalizedPhone.length < 11) {
+      return new Response(JSON.stringify({
+        success: false,
+        error: `Teléfono inválido tras normalizar país '${country_code || "(no seleccionado)"}'. Recibido: '${whatsapp_number}'. Resultado: '${normalizedPhone}'. Debe tener al menos 11 dígitos incluyendo código de país.`
+      }), {
+        status: 400,
+        headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" }
+      });
+    }
+    
+    // Resolver timezone y país según country_code
+    const timezone = countryToTimezone(country_code);
+    const paisCode = (country_code || "").toUpperCase() || "CL";
+    const paisNombre = countryToName(country_code);
     
     // Generar slug único
     let baseSlug = business_name.toLowerCase()
@@ -5544,17 +5652,18 @@ async function handleOnboardingRegister(request, env2) {
       slug = `${baseSlug}-${suffix}`;
     }
     
-    // Crear tenant pending
+    // Crear tenant pending CON timezone y pais
     const result = await env2.DB.prepare(
-      "INSERT INTO tenants (slug, business_name, whatsapp_number, email, rubro, status) VALUES (?, ?, ?, ?, ?, 'pending_approval')"
-    ).bind(slug, business_name, whatsapp_number, email || null, rubro || "taller").run();
+      "INSERT INTO tenants (slug, business_name, whatsapp_number, email, rubro, status, pais, timezone) VALUES (?, ?, ?, ?, ?, 'pending_approval', ?, ?)"
+    ).bind(slug, business_name, normalizedPhone, email || null, rubro || "taller", paisCode, timezone).run();
     
     const tenantId = result.meta?.last_row_id;
     
     // Notificar al admin por WhatsApp
     const adminMsg = `🔔 *Nueva solicitud de bot*\n\n` +
       `📌 *Negocio:* ${business_name}\n` +
-      `📱 *WhatsApp:* ${whatsapp_number}\n` +
+      `📱 *WhatsApp:* ${normalizedPhone} (país: ${paisNombre})\n` +
+      `🌍 *Zona horaria:* ${timezone}\n` +
       `📧 *Email:* ${email || "no informado"}\n` +
       `🏷️ *Rubro:* ${rubro || "taller"}\n` +
       `🆔 *Slug:* ${slug}\n\n` +
@@ -5568,20 +5677,22 @@ async function handleOnboardingRegister(request, env2) {
       console.error("Error enviando WhatsApp al admin:", e);
     }
     
-    // Enviar confirmación al cliente (al WhatsApp que registró)
+    // Enviar confirmación al cliente (al WhatsApp normalizado que registró)
     try {
-      const clientPhone = (whatsapp_number || "").replace(/[^0-9]/g, "");
+      const clientPhone = normalizedPhone;
       if (clientPhone.length >= 8) {
         const clientMsg = `✅ *¡Solicitud recibida!*
 
 📌 *Negocio:* ${business_name}
 🏷️ *Rubro:* ${rubro || "taller"}
+📱 *Tu WhatsApp:* ${clientPhone}
+🌍 *Zona horaria:* ${timezone}
 
 Estamos validando tu solicitud. Te avisaremos por aquí en cuanto tu bot esté listo (generalmente en minutos).
 
 Mientras tanto, puedes ver el estado de tu solicitud aquí:
 https://sgc-saas.pages.dev/status?slug=${slug}`;
-        await enviarWhatsAppEvolution(env2, env2.ADMIN_PHONE, clientMsg);
+        await enviarWhatsAppEvolution(env2, clientPhone, clientMsg);
         console.log(`Confirmación enviada al cliente ${clientPhone} para tenant ${slug}`);
       }
     } catch (e) {
@@ -5592,6 +5703,9 @@ https://sgc-saas.pages.dev/status?slug=${slug}`;
       success: true,
       slug,
       tenant_id: tenantId,
+      whatsapp_normalized: normalizedPhone,
+      timezone,
+      pais: paisCode,
       message: "Solicitud creada. Te avisaremos por WhatsApp cuando sea aprobada.",
       status_url: `https://sgc-saas.pages.dev/status?slug=${slug}`
     }), {
@@ -5607,6 +5721,76 @@ https://sgc-saas.pages.dev/status?slug=${slug}`;
   }
 }
 __name(handleOnboardingRegister, "handleOnboardingRegister");
+
+// ============================================================
+// NORMALIZACIÓN DE TELÉFONO POR PAÍS
+// Quita "+", espacios, guiones, paréntesis.
+// Si el número empieza con 0, lo quita (prefijo de larga distancia local).
+// Luego prependa el código de país si el número no lo tiene ya.
+// ============================================================
+function normalizePhoneByCountry(rawPhone, countryCode) {
+  if (!rawPhone) return null;
+  const COUNTRY_CODES = {
+    "VE": "58", "CL": "56", "AR": "54", "CO": "57", "PE": "51",
+    "EC": "593", "UY": "598", "PY": "595", "BO": "591", "MX": "52",
+    "ES": "34", "US": "1", "DO": "1", "BR": "55",
+  };
+  let digits = String(rawPhone).replace(/[^0-9]/g, "");
+  if (!digits) return null;
+  while (digits.startsWith("0")) {
+    digits = digits.substring(1);
+  }
+  const cc = (countryCode || "").toUpperCase();
+  const prefix = COUNTRY_CODES[cc] || null;
+  if (!prefix) {
+    return digits;
+  }
+  if (digits.startsWith(prefix)) {
+    return digits;
+  }
+  return prefix + digits;
+}
+__name(normalizePhoneByCountry, "normalizePhoneByCountry");
+
+// ============================================================
+// MAPEO PAÍS → TIMEZONE (IANA)
+// ============================================================
+function countryToTimezone(countryCode) {
+  const COUNTRY_TZ = {
+    "VE": "America/Caracas",
+    "CL": "America/Santiago",
+    "AR": "America/Argentina/Buenos_Aires",
+    "CO": "America/Bogota",
+    "PE": "America/Lima",
+    "EC": "America/Guayaquil",
+    "UY": "America/Montevideo",
+    "PY": "America/Asuncion",
+    "BO": "America/La_Paz",
+    "MX": "America/Mexico_City",
+    "ES": "Europe/Madrid",
+    "US": "America/New_York",
+    "DO": "America/Santo_Domingo",
+    "BR": "America/Sao_Paulo",
+  };
+  const cc = (countryCode || "").toUpperCase();
+  return COUNTRY_TZ[cc] || "America/Santiago";
+}
+__name(countryToTimezone, "countryToTimezone");
+
+// ============================================================
+// MAPEO PAÍS → NOMBRE LEGIBLE
+// ============================================================
+function countryToName(countryCode) {
+  const COUNTRY_NAMES = {
+    "VE": "Venezuela", "CL": "Chile", "AR": "Argentina", "CO": "Colombia",
+    "PE": "Perú", "EC": "Ecuador", "UY": "Uruguay", "PY": "Paraguay",
+    "BO": "Bolivia", "MX": "México", "ES": "España", "US": "Estados Unidos",
+    "DO": "República Dominicana", "BR": "Brasil",
+  };
+  const cc = (countryCode || "").toUpperCase();
+  return COUNTRY_NAMES[cc] || "Chile";
+}
+__name(countryToName, "countryToName");
 
 async function handleOnboardingStatus(request, env2, url) {
   try {
