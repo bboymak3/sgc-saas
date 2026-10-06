@@ -1558,7 +1558,7 @@
     let botPaused = false;
     async function loadBotStatus() {
       try {
-        const data = await apiGet(`/api/tenant/bot-status?t=${slug}`);
+        const data = await apiGet(`/api/tenant/bot-status?t=${encodeURIComponent(SLUG)}`);
         botPaused = data.bot_paused === true;
         updateBotToggleUI();
       } catch (err) {
@@ -1586,7 +1586,7 @@
       btn.disabled = true;
       btn.textContent = '⏳ Procesando...';
       try {
-        const data = await apiPost(`/api/tenant/toggle-pause?t=${slug}`, {});
+        const data = await apiPost(`/api/tenant/toggle-pause?t=${encodeURIComponent(SLUG)}`, {});
         if (data.success) {
           botPaused = data.bot_paused;
           updateBotToggleUI();
