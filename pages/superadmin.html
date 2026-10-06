@@ -725,6 +725,51 @@
     </div>
   </div>
 
+  <!-- ===== MODELO IA MODAL (selector de proveedor/modelo por tenant) ===== -->
+  <div class="modal-overlay" id="aiModelModal">
+    <div class="modal">
+      <div class="modal-head">
+        <div>
+          <h3>⚡ Modelo de IA — <span id="aiModelTenantSlug"></span></h3>
+          <div class="sub">Configura qué proveedor de IA usa este tenant. Cloudflare es gratis (Llama 3.2 3B). Anthropic Claude requiere API key del tenant.</div>
+        </div>
+        <button class="modal-close" onclick="closeModal('aiModelModal')">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="aiProviderSelect">Proveedor de IA <span class="req">*</span></label>
+          <select id="aiProviderSelect" required onchange="toggleApiKeyVisibility()">
+            <option value="cloudflare">☁️ Cloudflare Workers AI (Gratis — Llama 3.2 3B)</option>
+            <option value="anthropic">🟠 Anthropic Claude (Mejor calidad — requiere API key)</option>
+          </select>
+          <div class="hint" style="font-size:0.78rem;color:var(--text-dim);margin-top:5px;">
+            Cloudflare: gratis, modelo Llama 3.2 3B, 10k neuronos/día.<br>
+            Anthropic: mejor calidad (Claude 3.5 Haiku/Sonnet), requiere API key del cliente.
+          </div>
+        </div>
+        <div class="form-group" id="aiModelGroup" style="display:none;">
+          <label for="aiModelInput">Modelo específico (opcional)</label>
+          <input type="text" id="aiModelInput" placeholder="Ej: claude-3-5-haiku-latest, claude-3-5-sonnet-latest">
+          <div class="hint" style="font-size:0.78rem;color:var(--text-dim);margin-top:5px;">
+            Si lo dejas vacío, se usará el modelo default según el proveedor.
+          </div>
+        </div>
+        <div class="form-group" id="apiKeyGroup" style="display:none;">
+          <label for="apiKeyInput">Anthropic API Key <span class="req">*</span></label>
+          <input type="password" id="apiKeyInput" placeholder="sk-ant-api03-...">
+          <div class="hint" style="font-size:0.78rem;color:var(--text-dim);margin-top:5px;">
+            Obtén tu API key en <a href="https://console.anthropic.com/" target="_blank" rel="noopener" style="color:#00d4ff;">console.anthropic.com</a>. Se guarda cifrada en la DB del tenant.
+          </div>
+        </div>
+        <div id="aiModelError" class="login-error"></div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn" onclick="closeModal('aiModelModal')">Cancelar</button>
+        <button class="btn primary" id="aiModelSaveBtn" onclick="saveAiModel()">💾 Guardar configuración</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ===== PROMPT IA MODAL (🤖 IA por tenant) ===== -->
   <div class="modal-overlay" id="promptModal">
     <div class="modal">
@@ -1122,6 +1167,69 @@
     }
 
     // ============================================================
+    // ⚡ MODELO IA: SELECTOR DE PROVEEDOR POR TENANT
+    // ============================================================
+    let currentAiModelSlug = null;
+
+    function openAiModelModal(slug, currentProvider, currentModel) {
+      currentAiModelSlug = slug;
+      document.getElementById('aiModelTenantSlug').textContent = slug;
+      document.getElementById('aiProviderSelect').value = currentProvider || 'cloudflare';
+      document.getElementById('aiModelInput').value = currentModel || '';
+      document.getElementById('apiKeyInput').value = '';
+      document.getElementById('aiModelError').classList.remove('show');
+      toggleApiKeyVisibility();
+      openModal('aiModelModal');
+    }
+
+    function toggleApiKeyVisibility() {
+      const provider = document.getElementById('aiProviderSelect').value;
+      const apiKeyGroup = document.getElementById('apiKeyGroup');
+      const aiModelGroup = document.getElementById('aiModelGroup');
+      if (provider === 'anthropic') {
+        apiKeyGroup.style.display = '';
+        aiModelGroup.style.display = '';
+      } else {
+        apiKeyGroup.style.display = 'none';
+        aiModelGroup.style.display = 'none';
+      }
+    }
+
+    async function saveAiModel() {
+      const errBox = document.getElementById('aiModelError');
+      const btn = document.getElementById('aiModelSaveBtn');
+      errBox.classList.remove('show');
+      if (!currentAiModelSlug) return;
+      const provider = document.getElementById('aiProviderSelect').value;
+      const model = document.getElementById('aiModelInput').value.trim();
+      const apiKey = document.getElementById('apiKeyInput').value.trim();
+      if (provider === 'anthropic' && !apiKey) {
+        errBox.textContent = '❌ Anthropic requiere API key';
+        errBox.classList.add('show');
+        return;
+      }
+      btn.disabled = true; btn.textContent = 'Guardando…';
+      try {
+        const body = { ai_provider: provider, ai_model: model || null };
+        if (provider === 'anthropic' && apiKey) body.anthropic_api_key = apiKey;
+        const data = await apiPut(`/api/superadmin/tenants/${encodeURIComponent(currentAiModelSlug)}/ai-model`, body);
+        if (data.success) {
+          showToast('success', `✅ ${data.message || 'Modelo IA actualizado'}`);
+          closeModal('aiModelModal');
+          await loadTenants();
+        } else {
+          errBox.textContent = '❌ ' + (data.error || 'Error al actualizar modelo IA');
+          errBox.classList.add('show');
+        }
+      } catch (err) {
+        errBox.textContent = '❌ Error: ' + err.message;
+        errBox.classList.add('show');
+      } finally {
+        btn.disabled = false; btn.textContent = '💾 Guardar configuración';
+      }
+    }
+
+    // ============================================================
     // 🤖 IA: EDITOR DE PROMPT POR TENANT
     // ============================================================
     let currentPromptSlug = null;
@@ -1299,6 +1407,7 @@
               <button class="btn" onclick="showCitas('${escapeAttr(t.slug)}')" title="Ver citas">📅 Citas</button>
               <button class="btn primary" onclick="showCreateCita('${escapeAttr(t.slug)}')" title="Crear cita">➕ Crear</button>
               <button class="btn info" onclick="openPromptModal('${escapeAttr(t.slug)}')" title="Editar prompt de IA y nombre del bot">🤖 IA</button>
+              <button class="btn" onclick="openAiModelModal('${escapeAttr(t.slug)}', '${escapeAttr(t.ai_provider || "cloudflare")}', '${escapeAttr(t.ai_model || "")}')" title="Configurar modelo de IA del tenant">⚡ Modelo IA</button>
               ${isPending ? `
                 <button class="btn warn" onclick="approveTenant('${escapeAttr(t.slug)}')">✅ Aprobar</button>
                 <button class="btn danger" onclick="rejectTenant('${escapeAttr(t.slug)}')">❌ Rechazar</button>

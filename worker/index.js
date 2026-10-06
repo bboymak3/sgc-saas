@@ -843,6 +843,57 @@ var CORS_HEADERS = {
   "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Admin-Password"
 };
+
+// ============================================================
+// HELPER: Ejecutar IA según el proveedor configurado del tenant
+// Si ai_provider="anthropic" y tiene api_key, usa Anthropic Claude
+// Si no, usa Cloudflare Workers AI (Llama 3.2 3B)
+// ============================================================
+async function runChatAI(env2, tenant, messages, options = {}) {
+  const provider = (tenant?.ai_provider || "cloudflare").toLowerCase();
+  const apiKey = tenant?.anthropic_api_key || null;
+  const model = tenant?.ai_model || null;
+
+  // Si el tenant tiene anthropic configurado con API key, usarlo
+  if (provider === "anthropic" && apiKey) {
+    try {
+      const claudeModel = model || "claude-3-5-haiku-latest";
+      const response = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          model: claudeModel,
+          max_tokens: options.max_tokens || 1024,
+          system: messages.find(m => m.role === "system")?.content || "",
+          messages: messages.filter(m => m.role !== "system").map(m => ({
+            role: m.role,
+            content: m.content
+          }))
+        })
+      });
+      if (!response.ok) {
+        const errText = await response.text();
+        console.error(`[runChatAI] Anthropic error ${response.status}:`, errText.substring(0, 300));
+        console.log("[runChatAI] Fallback a Cloudflare AI");
+        return await env2.AI.run(MODEL_ID, { messages, ...options });
+      }
+      const data = await response.json();
+      const text = data.content?.[0]?.text || "";
+      return { response: text };
+    } catch (e) {
+      console.error("[runChatAI] Error Anthropic, fallback a Cloudflare:", e.message);
+      return await env2.AI.run(MODEL_ID, { messages, ...options });
+    }
+  }
+
+  // Default: Cloudflare Workers AI
+  return await env2.AI.run(MODEL_ID, { messages, ...options });
+}
+__name(runChatAI, "runChatAI");
 function superAdminCheckAuth(request, url) {
   const headerPwd = request.headers.get("X-Admin-Password") || request.headers.get("x-admin-password");
   if (headerPwd && headerPwd === SUPERADMIN_PASSWORD) return true;
@@ -3762,6 +3813,48 @@ Lamentamos las molestias. Para m\xE1s informaci\xF3n o reagendar, contacte direc
           return superAdminJson({ success: false, error: "Tenant no encontrado" }, 404);
         }
         return superAdminJson({ success: true, slug, premium: premiumVal === 1 });
+      }
+
+      // ============================================================
+      // PUT /api/superadmin/tenants/<slug>/ai-model
+      // Configura el proveedor de IA y modelo del tenant
+      // Body: { ai_provider: "cloudflare" | "anthropic", ai_model: "...", anthropic_api_key: "..." }
+      // ============================================================
+      const saAiModelMatch = path.match(/^\/api\/superadmin\/tenants\/([^/]+)\/ai-model$/);
+      if (saAiModelMatch && request.method === "PUT") {
+        if (!superAdminCheckAuth(request, url)) return superAdminUnauthorized();
+        const slug = decodeURIComponent(saAiModelMatch[1]);
+        const body = await request.json().catch(() => ({}));
+        const aiProvider = (body.ai_provider || "cloudflare").toLowerCase();
+        const aiModel = body.ai_model || null;
+        const apiKey = body.anthropic_api_key || null;
+
+        // Validar provider
+        if (!["cloudflare", "anthropic"].includes(aiProvider)) {
+          return superAdminJson({ success: false, error: "ai_provider inválido. Valores permitidos: cloudflare, anthropic" }, 400);
+        }
+
+        // Si es anthropic, validar que tenga API key
+        if (aiProvider === "anthropic" && !apiKey) {
+          return superAdminJson({ success: false, error: "anthropic_api_key es requerido cuando ai_provider=anthropic" }, 400);
+        }
+
+        const tenant = await env2.DB.prepare("SELECT id, business_name, ai_provider, ai_model FROM tenants WHERE slug = ?").bind(slug).first();
+        if (!tenant) return superAdminJson({ success: false, error: "Tenant no encontrado" }, 404);
+
+        await env2.DB.prepare(
+          "UPDATE tenants SET ai_provider = ?, ai_model = ?, anthropic_api_key = ? WHERE slug = ?"
+        ).bind(aiProvider, aiModel, apiKey, slug).run();
+
+        return superAdminJson({
+          success: true,
+          slug,
+          old_provider: tenant.ai_provider || "cloudflare",
+          old_model: tenant.ai_model,
+          new_provider: aiProvider,
+          new_model: aiModel,
+          message: `Modelo IA actualizado a ${aiProvider}${aiModel ? " / " + aiModel : ""}`
+        });
       }
 
       // POST /api/superadmin/tenants/<slug>/products-toggle

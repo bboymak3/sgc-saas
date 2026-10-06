@@ -840,6 +840,24 @@
 
       <!-- TAB: Config -->
       <div class="tab-content" id="tab-config">
+        <!-- Card: Toggle ON/OFF del bot -->
+        <div class="config-card" style="margin-bottom:20px;border:2px solid var(--primary);padding:24px;">
+          <h3>🤖 Estado del bot</h3>
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;">
+            <div>
+              <div id="botStatusText" style="font-size:1.1rem;font-weight:600;color:var(--text);margin-bottom:4px;">
+                ⏳ Cargando estado...
+              </div>
+              <div id="botStatusDesc" style="font-size:0.85rem;color:var(--text-dim);">
+                Cuando el bot está pausado, NO responderá a ningún mensaje de WhatsApp. Los clientes podrán seguir agendando vía web.
+              </div>
+            </div>
+            <button id="botToggleBtn" onclick="toggleBotPause()" style="padding:12px 28px;border:none;border-radius:8px;font-size:0.9rem;font-weight:600;cursor:pointer;background:#6b7280;color:#fff;transition:all 0.3s ease;min-width:140px;">
+              ⏳ Cargando...
+            </button>
+          </div>
+        </div>
+
         <div class="config-grid">
           <div class="config-card">
             <h3>📋 Información del negocio</h3>
@@ -1532,6 +1550,58 @@
         <div class="config-row"><span class="label">Aprobado</span><span class="value">${t.approved_at ? formatDate(t.approved_at.split(' ')[0]) : '—'}</span></div>
         <div class="config-row"><span class="label">Activo desde</span><span class="value">${t.active_at ? formatDate(t.active_at.split(' ')[0]) : '—'}</span></div>
       `;
+      // Cargar estado del bot
+      loadBotStatus();
+    }
+
+    // ===== TOGGLE ON/OFF DEL BOT =====
+    let botPaused = false;
+    async function loadBotStatus() {
+      try {
+        const data = await apiGet(`/api/tenant/bot-status?t=${slug}`);
+        botPaused = data.bot_paused === true;
+        updateBotToggleUI();
+      } catch (err) {
+        console.error('loadBotStatus', err);
+        document.getElementById('botStatusText').textContent = '❌ Error al cargar estado';
+        document.getElementById('botToggleBtn').textContent = 'Reintentar';
+        document.getElementById('botToggleBtn').style.background = '#ef4444';
+      }
+    }
+    function updateBotToggleUI() {
+      const text = document.getElementById('botStatusText');
+      const btn = document.getElementById('botToggleBtn');
+      if (botPaused) {
+        text.innerHTML = '⏸️ <span style="color:#f59e0b;">Bot PAUSADO</span>';
+        btn.textContent = '▶️ Reactivar bot';
+        btn.style.background = '#22c55e';
+      } else {
+        text.innerHTML = '✅ <span style="color:#22c55e;">Bot ACTIVO</span>';
+        btn.textContent = '⏸️ Pausar bot';
+        btn.style.background = '#f59e0b';
+      }
+    }
+    async function toggleBotPause() {
+      const btn = document.getElementById('botToggleBtn');
+      btn.disabled = true;
+      btn.textContent = '⏳ Procesando...';
+      try {
+        const data = await apiPost(`/api/tenant/toggle-pause?t=${slug}`, {});
+        if (data.success) {
+          botPaused = data.bot_paused;
+          updateBotToggleUI();
+          toast('success', botPaused ? 'Bot pausado' : 'Bot reactivado', data.message || '');
+        } else {
+          toast('error', 'Error', data.error || 'desconocido');
+          updateBotToggleUI();
+        }
+      } catch (err) {
+        console.error('toggleBotPause', err);
+        toast('error', 'Error', 'No se pudo cambiar el estado del bot');
+        updateBotToggleUI();
+      } finally {
+        btn.disabled = false;
+      }
     }
 
     // ===== Tabs =====
