@@ -2173,6 +2173,73 @@ Lamentamos las molestias. Para m\xE1s informaci\xF3n o reagendar, contacte direc
       }
 
       // ============================================================
+      // DEBUG: Test envío WhatsApp (superadmin only)
+      // POST /api/debug/send-test?pwd=<superadmin_pwd>&phone=<numero>
+      // Body: { message: "texto a enviar" }
+      // ============================================================
+      if (path === "/api/debug/send-test" && request.method === "POST") {
+        if (!superAdminCheckAuth(request, url)) return superAdminUnauthorized();
+        const phone = url.searchParams.get("phone") || "584167775771";
+        const body = await request.json().catch(() => ({}));
+        const message = body.message || "Test desde debug endpoint 🤖";
+        const useImage = body.image_base64 || null;
+
+        try {
+          if (useImage) {
+            // Test sendMedia
+            const url2 = `${env2.EVOLUTION_API_URL}/message/sendMedia/${encodeURIComponent(env2.EVOLUTION_INSTANCE_NAME)}`;
+            const bodyPayload = {
+              number: phone.replace(/[^0-9]/g, ""),
+              mediatype: "image",
+              mimetype: "image/png",
+              caption: message,
+              media: useImage.replace(/^data:image\/[a-z]+;base64,/, "")
+            };
+            const res = await fetch(url2, {
+              method: "POST",
+              headers: { "apikey": env2.EVOLUTION_API_KEY, "Content-Type": "application/json" },
+              body: JSON.stringify(bodyPayload)
+            });
+            const text = await res.text();
+            return superAdminJson({
+              success: res.ok,
+              status: res.status,
+              url: url2,
+              instance: env2.EVOLUTION_INSTANCE_NAME,
+              phone: phone,
+              payload_size: JSON.stringify(bodyPayload).length,
+              response: text.substring(0, 1000),
+              response_json: (() => { try { return JSON.parse(text); } catch(e) { return null; } })()
+            });
+          } else {
+            // Test sendText
+            const url2 = `${env2.EVOLUTION_API_URL}/message/sendText/${encodeURIComponent(env2.EVOLUTION_INSTANCE_NAME)}`;
+            const bodyPayload = {
+              number: phone.replace(/[^0-9]/g, ""),
+              text: message
+            };
+            const res = await fetch(url2, {
+              method: "POST",
+              headers: { "apikey": env2.EVOLUTION_API_KEY, "Content-Type": "application/json" },
+              body: JSON.stringify(bodyPayload)
+            });
+            const text = await res.text();
+            return superAdminJson({
+              success: res.ok,
+              status: res.status,
+              url: url2,
+              instance: env2.EVOLUTION_INSTANCE_NAME,
+              phone: phone,
+              response: text.substring(0, 1000),
+              response_json: (() => { try { return JSON.parse(text); } catch(e) { return null; } })()
+            });
+          }
+        } catch (e) {
+          return superAdminJson({ success: false, error: e.message }, 500);
+        }
+      }
+
+      // ============================================================
       // MEJORA 12 (PWA): Toggle pause / bot status — solo con slug (sin super admin)
       // ============================================================
       if (path === "/api/tenant/toggle-pause" && request.method === "POST") {
@@ -2822,38 +2889,59 @@ Lamentamos las molestias. Para m\xE1s informaci\xF3n o reagendar, contacte direc
         let instanceError = null;
 
         try {
-          const createRes = await fetch(`${env2.EVOLUTION_API_URL}/instance/create`, {
-            method: "POST",
-            headers: { "apikey": env2.EVOLUTION_API_KEY, "Content-Type": "application/json" },
-            body: JSON.stringify({
-              instanceName,
-              integration: "WHATSAPP-BAILEYS",
-              webhook: {
-                url: `https://sgc-saas.activo.workers.dev/api/whatsapp/webhook?t=${slug}`,
-                webhook_by_events: false,
-                events: ["messages.upsert", "connection.update"]
-              }
-            })
+          // Verificar si la instancia ya existe primero
+          const checkRes = await fetch(`${env2.EVOLUTION_API_URL}/instance/fetchInstances?instanceName=${encodeURIComponent(instanceName)}`, {
+            headers: { "apikey": env2.EVOLUTION_API_KEY }
           });
-          if (createRes.ok) {
-            instanceCreated = true;
-            for (let attempt = 1; attempt <= 3; attempt++) {
-              await new Promise(r => setTimeout(r, 4000));
-              try {
-                const qrRes = await fetch(`${env2.EVOLUTION_API_URL}/instance/connect/${instanceName}`, {
-                  headers: { "apikey": env2.EVOLUTION_API_KEY }
-                });
-                const qrData = await qrRes.json().catch(() => ({}));
-                const rawQr = qrData.base64 || qrData.qr || null;
-                if (rawQr) {
-                  qrBase64 = rawQr.replace(/^data:image\/[a-z]+;base64,/, "");
-                  break;
-                }
-              } catch (e) { /* retry */ }
-            }
+          const checkData = await checkRes.json().catch(() => []);
+          const existingInstances = Array.isArray(checkData) ? checkData : (checkData.result || []);
+          const instanceExists = existingInstances.length > 0;
+
+          if (instanceExists) {
+            // La instancia ya existe, no recrear
+            instanceCreated = false;
+            console.log(`[APPROVE] Instancia ${instanceName} ya existe, obteniendo QR...`);
           } else {
-            const errText = await createRes.text().catch(() => "");
-            instanceError = `HTTP ${createRes.status}: ${errText.substring(0, 200)}`;
+            // Crear instancia
+            const createRes = await fetch(`${env2.EVOLUTION_API_URL}/instance/create`, {
+              method: "POST",
+              headers: { "apikey": env2.EVOLUTION_API_KEY, "Content-Type": "application/json" },
+              body: JSON.stringify({
+                instanceName,
+                integration: "WHATSAPP-BAILEYS",
+                webhook: {
+                  url: `https://sgc-saas.activo.workers.dev/api/whatsapp/webhook?t=${slug}`,
+                  webhook_by_events: false,
+                  events: ["messages.upsert", "connection.update"]
+                }
+              })
+            });
+            if (createRes.ok) {
+              instanceCreated = true;
+            } else {
+              const errText = await createRes.text().catch(() => "");
+              instanceError = `HTTP ${createRes.status}: ${errText.substring(0, 200)}`;
+            }
+          }
+
+          // Esperar y obtener QR (la instancia ya existe, creada o preexistente)
+          for (let attempt = 1; attempt <= 5; attempt++) {
+            await new Promise(r => setTimeout(r, 4000));
+            try {
+              const qrRes = await fetch(`${env2.EVOLUTION_API_URL}/instance/connect/${instanceName}`, {
+                headers: { "apikey": env2.EVOLUTION_API_KEY }
+              });
+              const qrData = await qrRes.json().catch(() => ({}));
+              const rawQr = qrData.base64 || qrData.qr || qrData.qrcode || null;
+              if (rawQr) {
+                qrBase64 = rawQr.replace(/^data:image\/[a-z]+;base64,/, "");
+                console.log(`[APPROVE] QR obtenido en intento ${attempt}/5`);
+                break;
+              }
+              console.log(`[APPROVE] Intento ${attempt}/5: QR no disponible aún`);
+            } catch (e) {
+              console.error(`[APPROVE] Intento ${attempt}/5 QR falló:`, e.message);
+            }
           }
           await env2.DB.prepare("UPDATE tenants SET evolution_instance = ? WHERE slug = ?").bind(instanceName, slug).run();
         } catch (e) {
@@ -2876,6 +2964,46 @@ Lamentamos las molestias. Para m\xE1s informaci\xF3n o reagendar, contacte direc
           console.error("Error aplicando plantilla on approve:", e);
         }
 
+        // ENVIAR QR AL CLIENTE POR WHATSAPP
+        let qrSentToClient = false;
+        let qrSendError = null;
+        if (qrBase64 && tenant.whatsapp_number) {
+          const cleanPhone = String(tenant.whatsapp_number).replace(/[^0-9]/g, "");
+          try {
+            // 1. Mensaje de texto previo
+            await enviarWhatsAppEvolution(env2, cleanPhone,
+              `🎉 ¡Tu bot está listo, ${tenant.business_name}!\n\n` +
+              `Te envío el código QR como imagen en el próximo mensaje. Para activarlo:\n` +
+              `1. Abre WhatsApp en tu celular\n` +
+              `2. Ve a Configuración → Dispositivos vinculados → Vincular dispositivo\n` +
+              `3. Escanea el QR que te envié\n\n` +
+              `Una vez conectado, tu bot estará activo. Prueba escribiéndome "Hola".`
+            );
+            // 2. QR como imagen (usando instancia admin 'make' que está conectada)
+            const mediaRes = await enviarImagenWhatsAppEvolution(
+              env2, env2.EVOLUTION_INSTANCE_NAME, cleanPhone, qrBase64,
+              `📱 Escanea este QR para activar tu bot de ${tenant.business_name}\n\n` +
+              `1. Abre WhatsApp en tu celular\n` +
+              `2. Configuración → Dispositivos vinculados → Vincular dispositivo\n` +
+              `3. Apunta la cámara al QR\n\n` +
+              `Una vez escaneado, tu bot estará activo ✅`
+            );
+            qrSentToClient = mediaRes.success;
+            if (!mediaRes.success) {
+              qrSendError = mediaRes.error;
+              // Fallback: enviar link
+              await enviarWhatsAppEvolution(env2, cleanPhone,
+                `⚠️ No se pudo enviar el QR como imagen.\n` +
+                `📱 Tu QR está disponible aquí:\n${env2.EVOLUTION_API_URL}/instance/connect/${instanceName}\n\n` +
+                `O entra a: https://sgc-saas.pages.dev/status?slug=${slug}`
+              );
+            }
+          } catch (e) {
+            qrSendError = e.message;
+            console.error("Error enviando QR al cliente:", e);
+          }
+        }
+
         return superAdminJson({
           success: true,
           instance: instanceName,
@@ -2883,8 +3011,155 @@ Lamentamos las molestias. Para m\xE1s informaci\xF3n o reagendar, contacte direc
           instance_error: instanceError,
           qr: qrBase64 ? `data:image/png;base64,${qrBase64}` : null,
           qr_url: `${env2.EVOLUTION_API_URL}/instance/connect/${instanceName}`,
+          qr_sent_to_client: qrSentToClient,
+          qr_send_error: qrSendError,
+          client_phone: tenant.whatsapp_number,
           template_applied: templateApplied
         });
+      }
+
+      // ============================================================
+      // RE-ENVIAR QR A UN TENANT (superadmin)
+      // POST /api/superadmin/tenants/<slug>/resend-qr
+      // Re-genera el QR de la instancia y lo envía al WhatsApp del cliente
+      // ============================================================
+      const saResendQrMatch = path.match(/^\/api\/superadmin\/tenants\/([^/]+)\/resend-qr$/);
+      if (saResendQrMatch && request.method === "POST") {
+        if (!superAdminCheckAuth(request, url)) return superAdminUnauthorized();
+        const slug = decodeURIComponent(saResendQrMatch[1]);
+        const tenant = await env2.DB.prepare("SELECT * FROM tenants WHERE slug = ?").bind(slug).first();
+        if (!tenant) return superAdminJson({ success: false, error: "Tenant no encontrado" }, 404);
+
+        const instanceName = tenant.evolution_instance || ("t_" + slug.replace(/-/g, "_"));
+        let qrBase64 = null;
+        let instanceState = "unknown";
+
+        try {
+          // Verificar estado actual
+          const stateRes = await fetch(`${env2.EVOLUTION_API_URL}/instance/fetchInstances?instanceName=${encodeURIComponent(instanceName)}`, {
+            headers: { "apikey": env2.EVOLUTION_API_KEY }
+          });
+          const stateData = await stateRes.json().catch(() => []);
+          const instances = Array.isArray(stateData) ? stateData : (stateData.result || []);
+          const inst = instances[0] || {};
+          instanceState = inst.connectionStatus || inst.state || "unknown";
+
+          if (instanceState === "open") {
+            return superAdminJson({
+              success: true,
+              already_connected: true,
+              state: "open",
+              message: "WhatsApp ya está conectado, no necesita QR.",
+              instance: instanceName
+            });
+          }
+
+          // Si la instancia no existe, crearla
+          if (instances.length === 0) {
+            console.log(`[RESEND-QR] Instancia ${instanceName} no existe, creando...`);
+            const createRes = await fetch(`${env2.EVOLUTION_API_URL}/instance/create`, {
+              method: "POST",
+              headers: { "apikey": env2.EVOLUTION_API_KEY, "Content-Type": "application/json" },
+              body: JSON.stringify({
+                instanceName,
+                integration: "WHATSAPP-BAILEYS",
+                webhook: {
+                  url: `https://sgc-saas.activo.workers.dev/api/whatsapp/webhook?t=${slug}`,
+                  webhook_by_events: false,
+                  events: ["messages.upsert", "connection.update"]
+                }
+              })
+            });
+            if (!createRes.ok) {
+              const errText = await createRes.text().catch(() => "");
+              return superAdminJson({
+                success: false,
+                error: `No se pudo crear instancia: HTTP ${createRes.status} - ${errText.substring(0, 200)}`
+              }, 500);
+            }
+            await env2.DB.prepare("UPDATE tenants SET evolution_instance = ? WHERE slug = ?").bind(instanceName, slug).run();
+          }
+
+          // Si está en "close", reconectar primero
+          if (instanceState === "close") {
+            console.log(`[RESEND-QR] Instancia en close, intentando reconectar...`);
+            // Llamar a /instance/connect la reinicia automáticamente
+          }
+
+          // Obtener QR (hasta 5 intentos con espera)
+          for (let attempt = 1; attempt <= 5; attempt++) {
+            await new Promise(r => setTimeout(r, 4000));
+            try {
+              const qrRes = await fetch(`${env2.EVOLUTION_API_URL}/instance/connect/${instanceName}`, {
+                headers: { "apikey": env2.EVOLUTION_API_KEY }
+              });
+              const qrData = await qrRes.json().catch(() => ({}));
+              const rawQr = qrData.base64 || qrData.qr || qrData.qrcode || null;
+              if (rawQr) {
+                qrBase64 = rawQr.replace(/^data:image\/[a-z]+;base64,/, "");
+                console.log(`[RESEND-QR] QR obtenido en intento ${attempt}/5`);
+                break;
+              }
+            } catch (e) {
+              console.error(`[RESEND-QR] Intento ${attempt}/5 falló:`, e.message);
+            }
+          }
+
+          if (!qrBase64) {
+            return superAdminJson({
+              success: false,
+              error: "No se pudo generar QR después de 5 intentos. Intenta de nuevo en 1 minuto.",
+              state: instanceState,
+              instance: instanceName
+            }, 500);
+          }
+
+          // Enviar al cliente
+          let qrSentToClient = false;
+          let qrSendError = null;
+          if (tenant.whatsapp_number) {
+            const cleanPhone = String(tenant.whatsapp_number).replace(/[^0-9]/g, "");
+            try {
+              await enviarWhatsAppEvolution(env2, cleanPhone,
+                `📱 Te reenviamos el QR para activar tu bot de ${tenant.business_name}\n\n` +
+                `1. Abre WhatsApp en tu celular\n` +
+                `2. Configuración → Dispositivos vinculados → Vincular dispositivo\n` +
+                `3. Escanea el QR que te enviaremos a continuación\n\n` +
+                `Si ya habías escaneado uno antes, ignóralo y usa este nuevo.`
+              );
+              const mediaRes = await enviarImagenWhatsAppEvolution(
+                env2, env2.EVOLUTION_INSTANCE_NAME, cleanPhone, qrBase64,
+                `📱 Escanea este QR para activar tu bot de ${tenant.business_name}`
+              );
+              qrSentToClient = mediaRes.success;
+              if (!mediaRes.success) {
+                qrSendError = mediaRes.error;
+                console.error(`[RESEND-QR] Falló envío de imagen:`, mediaRes);
+                // Fallback: enviar QR como link
+                await enviarWhatsAppEvolution(env2, cleanPhone,
+                  `⚠️ No se pudo enviar el QR como imagen.\n\n` +
+                  `📱 Tu QR está disponible aquí:\n${env2.EVOLUTION_API_URL}/instance/connect/${instanceName}\n\n` +
+                  `O entra a: https://sgc-saas.pages.dev/status?slug=${slug}`
+                );
+              }
+            } catch (e) {
+              qrSendError = e.message;
+            }
+          }
+
+          return superAdminJson({
+            success: true,
+            qr: `data:image/png;base64,${qrBase64}`,
+            qr_sent_to_client: qrSentToClient,
+            qr_send_error: qrSendError,
+            client_phone: tenant.whatsapp_number,
+            instance: instanceName,
+            state: instanceState,
+            media_response: qrSentToClient ? "sent" : "failed"
+          });
+        } catch (e) {
+          return superAdminJson({ success: false, error: "Error: " + e.message }, 500);
+        }
       }
 
       const saRejectMatch = path.match(/^\/api\/superadmin\/tenants\/([^/]+)\/reject$/);
@@ -4442,7 +4717,7 @@ __name(notifyOwnerNewCita, "notifyOwnerNewCita");
 // ============================================================
 async function enviarImagenWhatsAppEvolution(env2, instanceName, phone, base64, caption) {
   try {
-    const inst = instanceName || env2.EVOLUTION_INSTANCE_NAME || "make peueba";
+    const inst = instanceName || env2.EVOLUTION_INSTANCE_NAME || "make";
     const apiKey = env2.EVOLUTION_API_KEY;
     const baseUrl = env2.EVOLUTION_API_URL;
     if (!apiKey || !baseUrl) {
@@ -4453,31 +4728,50 @@ async function enviarImagenWhatsAppEvolution(env2, instanceName, phone, base64, 
     // Asegurar que base64 no tenga el prefijo data:image/...;base64,
     const cleanBase64 = (base64 || "").replace(/^data:image\/[a-z]+;base64,/, "");
     if (!cleanBase64) {
-      return { success: false, error: "base64 vac\u00edo" };
+      return { success: false, error: "base64 vacío" };
     }
     const url2 = `${baseUrl}/message/sendMedia/${encodeURIComponent(inst)}`;
+
+    // Evolution API v2.3+ requiere el formato correcto:
+    // - number: teléfono
+    // - mediatype: "image"
+    // - mimetype: "image/png"
+    // - caption: texto
+    // - media: base64 SIN el prefijo data:...
+    const bodyPayload = {
+      number: cleanPhone,
+      mediatype: "image",
+      mimetype: "image/png",
+      caption: caption || "",
+      media: cleanBase64
+    };
+
+    console.log(`[sendMedia] POST ${url2} → phone=${cleanPhone} media_size=${cleanBase64.length} caption_len=${(caption||"").length}`);
+
     const response = await fetch(url2, {
       method: "POST",
       headers: {
         "apikey": apiKey,
         "Content-Type": "application/json"
       },
-      body: JSON.stringify({
-        number: cleanPhone,
-        media: {
-          mediatype: "image",
-          caption: caption || "",
-          media: cleanBase64
-        }
-      })
+      body: JSON.stringify(bodyPayload)
     });
-    const data = await response.json().catch(() => ({}));
+
+    const responseText = await response.text();
+    let data = {};
+    try { data = JSON.parse(responseText); } catch (e) { data = { raw: responseText }; }
+
     if (response.ok) {
-      console.log(`Imagen WhatsApp enviada a ${cleanPhone} (instance=${inst})`);
+      console.log(`[sendMedia] ✅ Imagen enviada a ${cleanPhone} (instance=${inst})`);
       return { success: true };
     } else {
-      console.error("Evolution API sendMedia error:", response.status, JSON.stringify(data));
-      return { success: false, error: data.message || data.error || `HTTP ${response.status}` };
+      console.error(`[sendMedia] ❌ Error ${response.status}:`, responseText.substring(0, 500));
+      return {
+        success: false,
+        error: data.message || data.error || `HTTP ${response.status}`,
+        status: response.status,
+        response: responseText.substring(0, 500)
+      };
     }
   } catch (error) {
     console.error("Error enviarImagenWhatsAppEvolution:", error);
