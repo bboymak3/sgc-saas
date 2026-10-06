@@ -1283,6 +1283,18 @@ async function getTenantFromPhone(env2, phone) {
 __name(getTenantFromPhone, "getTenantFromPhone");
 
 async function resolveTenantForWebhook(env2, body, url) {
+  // 0. CHECK DE ADMIN PRIMERO (antes que cualquier otra cosa)
+  // Si el mensaje viene del admin (incluso si hay ?t= en la URL),
+  // procesar como comando admin. Esto permite que el admin escriba
+  // "AYUDA" a cualquier bot de cualquier tenant y funcione.
+  const data0 = body.data || {};
+  const key0 = data0.key || {};
+  const phone0 = (key0.remoteJid || "").replace("@s.whatsapp.net", "");
+  const adminPhoneEnv = (env2.ADMIN_PHONE || "584167775771").replace(/[^0-9]/g, "");
+  if (phone0 && phone0 === adminPhoneEnv) {
+    return { is_admin: true, slug: "admin" };
+  }
+
   // 1. Intentar por query param ?t=
   if (url) {
     const slug = url.searchParams.get("t");
@@ -1291,24 +1303,16 @@ async function resolveTenantForWebhook(env2, body, url) {
       if (t) return t;
     }
   }
-  
-  // 2. Si el mensaje viene del admin, es comando admin (no tenant específico)
-  const data = body.data || {};
-  const key = data.key || {};
-  const phone = (key.remoteJid || "").replace("@s.whatsapp.net", "");
-  if (phone === "584167775771") {
-    return { is_admin: true, slug: "admin" };
-  }
-  
-  // 3. Buscar tenant por el número que recibe (instance name en body)
+
+  // 2. Buscar tenant por el número que recibe (instance name en body)
   const instanceName = body.instance;
   if (instanceName && instanceName.startsWith("t_")) {
     const slug = instanceName.replace("t_", "").replace(/_/g, "-");
     const t = await env2.DB.prepare("SELECT * FROM tenants WHERE slug = ?").bind(slug).first();
     if (t) return t;
   }
-  
-  // 4. Default: tenant 1 (SGC)
+
+  // 3. Default: tenant 1 (SGC)
   return await env2.DB.prepare("SELECT * FROM tenants WHERE id = 1").first();
 }
 __name(resolveTenantForWebhook, "resolveTenantForWebhook");
@@ -2079,6 +2083,93 @@ Lamentamos las molestias. Para m\xE1s informaci\xF3n o reagendar, contacte direc
         return new Response(JSON.stringify({ ok: true, msg: "Webhook endpoint activo", time: new Date().toISOString() }), {
           headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
         });
+      }
+
+      // ============================================================
+      // DEBUG: Listar instancias de Evolution API (superadmin only)
+      // GET /api/debug/instances?pwd=<superadmin_pwd>
+      // ============================================================
+      if (path === "/api/debug/instances" && request.method === "GET") {
+        if (!superAdminCheckAuth(request, url)) return superAdminUnauthorized();
+        try {
+          const res = await fetch(`${env2.EVOLUTION_API_URL}/instance/fetchInstances`, {
+            headers: { "apikey": env2.EVOLUTION_API_KEY }
+          });
+          const data = await res.json();
+          return superAdminJson({
+            success: res.ok,
+            status: res.status,
+            evolution_api_url: env2.EVOLUTION_API_URL,
+            configured_admin_instance: env2.EVOLUTION_INSTANCE_NAME,
+            instances: Array.isArray(data) ? data.map(i => ({
+              name: i.name || i.instance?.name || "(sin nombre)",
+              state: i.connectionStatus || i.state || i.status || "(desconocido)"
+            })) : data
+          });
+        } catch (e) {
+          return superAdminJson({ success: false, error: e.message }, 500);
+        }
+      }
+
+      // ============================================================
+      // DEBUG: Verificar estado de instancia específica (superadmin only)
+      // GET /api/debug/instance/<name>?pwd=<superadmin_pwd>
+      // ============================================================
+      const debugInstMatch = path.match(/^\/api\/debug\/instance\/(.+)$/);
+      if (debugInstMatch && request.method === "GET") {
+        if (!superAdminCheckAuth(request, url)) return superAdminUnauthorized();
+        const instName = decodeURIComponent(debugInstMatch[1]);
+        try {
+          const res = await fetch(`${env2.EVOLUTION_API_URL}/instance/connect/${encodeURIComponent(instName)}`, {
+            headers: { "apikey": env2.EVOLUTION_API_KEY }
+          });
+          const data = await res.json().catch(() => ({}));
+          return superAdminJson({
+            success: res.ok,
+            status: res.status,
+            instance: instName,
+            exists: res.status !== 404,
+            response: data
+          });
+        } catch (e) {
+          return superAdminJson({ success: false, error: e.message }, 500);
+        }
+      }
+
+      // ============================================================
+      // DEBUG: Crear instancia admin (superadmin only)
+      // POST /api/debug/create-admin-instance?pwd=<superadmin_pwd>
+      // ============================================================
+      if (path === "/api/debug/create-admin-instance" && request.method === "POST") {
+        if (!superAdminCheckAuth(request, url)) return superAdminUnauthorized();
+        try {
+          const instName = env2.EVOLUTION_INSTANCE_NAME || "make peueba";
+          const res = await fetch(`${env2.EVOLUTION_API_URL}/instance/create`, {
+            method: "POST",
+            headers: {
+              "apikey": env2.EVOLUTION_API_KEY,
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+              instanceName: instName,
+              integration: "WHATSAPP-BAILEYS",
+              webhook: {
+                url: `https://sgc-saas.activo.workers.dev/api/whatsapp/webhook`,
+                webhook_by_events: false,
+                events: ["messages.upsert", "connection.update"]
+              }
+            })
+          });
+          const data = await res.json().catch(() => ({}));
+          return superAdminJson({
+            success: res.ok,
+            status: res.status,
+            instance: instName,
+            response: data
+          });
+        } catch (e) {
+          return superAdminJson({ success: false, error: e.message }, 500);
+        }
       }
 
       // ============================================================
@@ -3631,16 +3722,23 @@ async function handleWhatsAppWebhook(request, env2) {
   try {
     const body = await request.json();
     const requestUrl = new URL(request.url);
-    
+
+    // Log inicial para debugging
+    const instanceName = body.instance || "(sin instance)";
+    const evt0 = body.event || "(sin event)";
+    const path = requestUrl.pathname + requestUrl.search;
+    console.log(`[WEBHOOK] ${path} | instance=${instanceName} | event=${evt0}`);
+
     // Resolver tenant (por query param, instance name, o default)
     const tenant = await resolveTenantForWebhook(env2, body, requestUrl);
-    
+
     // Si es admin (tu WhatsApp), ejecutar comando admin
     // (antes de verificar event, porque el admin puede mandar cualquier evento)
     if (tenant && tenant.is_admin) {
+      console.log(`[WEBHOOK] → handleAdminCommand (admin detectado)`);
       return await handleAdminCommand(env2, body);
     }
-    
+
     // Evolution API v2 format - ser tolerante con el event
     const evt = (body.event || "").toLowerCase();
     if (evt !== "messages.upsert" && evt !== "message_received" && evt !== "messages.create") {
@@ -4693,25 +4791,52 @@ async function handleAdminCommand(env2, body) {
     const data = body.data || {};
     const key = data.key || {};
     const phone = (key.remoteJid || "").replace("@s.whatsapp.net", "");
-    
-    // Validar que viene del admin
-    if (phone !== env2.ADMIN_PHONE) {
+
+    // Validar que viene del admin (usar env2.ADMIN_PHONE, no hardcoded)
+    const adminPhoneEnv = (env2.ADMIN_PHONE || "584167775771").replace(/[^0-9]/g, "");
+    console.log(`[ADMIN CMD] phone=${phone} adminPhoneEnv=${adminPhoneEnv} fromMe=${key.fromMe}`);
+    if (phone !== adminPhoneEnv) {
+      console.log(`[ADMIN CMD] NO coincide con admin, ignorando`);
       return new Response("OK", { status: 200 });
     }
-    
+
+    // Extraer texto de cualquier formato de mensaje posible
     let text = "";
     const msg = data.message || {};
-    if (msg.conversation) text = msg.conversation;
-    else if (msg.extendedTextMessage?.text) text = msg.extendedTextMessage.text;
-    
+    if (msg.conversation) {
+      text = msg.conversation;
+    } else if (msg.extendedTextMessage?.text) {
+      text = msg.extendedTextMessage.text;
+    } else if (msg.imageMessage?.caption) {
+      text = msg.imageMessage.caption;
+    } else if (msg.videoMessage?.caption) {
+      text = msg.videoMessage.caption;
+    } else if (msg.documentMessage?.caption) {
+      text = msg.documentMessage.caption;
+    } else if (msg.buttonsResponseMessage?.selectedButtonId) {
+      text = msg.buttonsResponseMessage.selectedButtonId;
+    } else if (msg.listResponseMessage?.singleSelectReply?.selectedRowId) {
+      text = msg.listResponseMessage.singleSelectReply.selectedRowId;
+    } else if (msg.templateMessage?.hydratedTemplate?.hydratedContentText) {
+      text = msg.templateMessage.hydratedTemplate.hydratedContentText;
+    } else if (msg.interactiveResponseMessage?.body?.text) {
+      text = msg.interactiveResponseMessage.body.text;
+    }
+
     text = (text || "").trim();
-    if (!text) return new Response("OK", { status: 200 });
-    
+    console.log(`[ADMIN CMD] texto extraído: "${text}"`);
+    if (!text) {
+      console.log(`[ADMIN CMD] texto vacío, ignorando. Message keys: ${Object.keys(msg).join(",")}`);
+      return new Response("OK", { status: 200 });
+    }
+
     // Parsear comando
     const parts = text.toUpperCase().split(/\s+/);
     const cmd = parts[0];
     const slug = parts[1]?.toLowerCase();
-    
+
+    console.log(`[ADMIN CMD] cmd="${cmd}" slug="${slug || "(ninguno)"}"`);
+
     let reply = "";
     
     if (cmd === "APROBAR" || cmd === "APROBADO" || cmd === "APROBAR.") {
@@ -5063,12 +5188,26 @@ async function handleAdminCommand(env2, body) {
       reply += `*SUSPENDER <slug>* - Suspender tenant\n`;
       reply += `*AYUDA* - Esta ayuda\n`;
       reply += `\nEjemplo: APROBAR barberia-don-juan`;
+      // Log del comando AYUDA
+      try {
+        await env2.DB.prepare(
+          "INSERT INTO admin_commands (command, slug, admin_phone, result) VALUES (?, ?, ?, ?)"
+        ).bind("AYUDA", null, phone, "help_shown").run();
+      } catch (e) { /* no crítico */ }
     } else {
       reply = `❓ Comando no reconocido: "${text}"\n\nUsa *AYUDA* para ver comandos disponibles.`;
+      // Log del comando no reconocido
+      try {
+        await env2.DB.prepare(
+          "INSERT INTO admin_commands (command, slug, admin_phone, result) VALUES (?, ?, ?, ?)"
+        ).bind("UNKNOWN", text.substring(0, 100), phone, "not_recognized").run();
+      } catch (e) { /* no crítico */ }
     }
-    
+
     // Responder al admin
-    await enviarWhatsAppEvolution(env2, phone, reply);
+    console.log(`[ADMIN CMD] Enviando respuesta a ${phone}: ${reply.substring(0, 80)}...`);
+    const sendResult = await enviarWhatsAppEvolution(env2, phone, reply);
+    console.log(`[ADMIN CMD] Resultado envío:`, sendResult);
     return new Response("OK", { status: 200 });
   } catch (error) {
     console.error("Error en handleAdminCommand:", error);
