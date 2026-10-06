@@ -848,6 +848,7 @@ var CORS_HEADERS = {
 // HELPER: Ejecutar IA según el proveedor configurado del tenant
 // Si ai_provider="anthropic" y tiene api_key, usa Anthropic Claude
 // Si no, usa Cloudflare Workers AI (Llama 3.2 3B)
+// Soporta tools (function calling) convirtiendo entre formatos
 // ============================================================
 async function runChatAI(env2, tenant, messages, options = {}) {
   const provider = (tenant?.ai_provider || "cloudflare").toLowerCase();
@@ -858,6 +859,38 @@ async function runChatAI(env2, tenant, messages, options = {}) {
   if (provider === "anthropic" && apiKey) {
     try {
       const claudeModel = model || "claude-3-5-haiku-latest";
+      
+      // Convertir tools de formato OpenAI/Cloudflare a Anthropic
+      let anthropicTools = null;
+      if (options.tools && Array.isArray(options.tools)) {
+        anthropicTools = options.tools.map(t => ({
+          name: t.function?.name || t.name,
+          description: t.function?.description || t.description,
+          input_schema: t.function?.parameters || t.parameters || { type: "object", properties: {} }
+        }));
+      }
+
+      // Construir body para Anthropic
+      const anthropicBody = {
+        model: claudeModel,
+        max_tokens: options.max_tokens || 1024,
+        system: messages.find(m => m.role === "system")?.content || "",
+        messages: messages.filter(m => m.role !== "system").map(m => ({
+          role: m.role === "assistant" ? "assistant" : "user",
+          content: m.content
+        }))
+      };
+      if (anthropicTools) anthropicTools = anthropicTools;
+      if (anthropicTools) anthropicBody.tools = anthropicTools;
+      
+      // tool_choice: forzar llamada a función específica
+      if (options.tool_choice) {
+        const fnName = options.tool_choice.function?.name;
+        if (fnName) {
+          anthropicBody.tool_choice = { type: "tool", name: fnName };
+        }
+      }
+
       const response = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
         headers: {
@@ -865,25 +898,57 @@ async function runChatAI(env2, tenant, messages, options = {}) {
           "anthropic-version": "2023-06-01",
           "Content-Type": "application/json"
         },
-        body: JSON.stringify({
-          model: claudeModel,
-          max_tokens: options.max_tokens || 1024,
-          system: messages.find(m => m.role === "system")?.content || "",
-          messages: messages.filter(m => m.role !== "system").map(m => ({
-            role: m.role,
-            content: m.content
-          }))
-        })
+        body: JSON.stringify(anthropicBody)
       });
+      
       if (!response.ok) {
         const errText = await response.text();
         console.error(`[runChatAI] Anthropic error ${response.status}:`, errText.substring(0, 300));
         console.log("[runChatAI] Fallback a Cloudflare AI");
         return await env2.AI.run(MODEL_ID, { messages, ...options });
       }
+      
       const data = await response.json();
-      const text = data.content?.[0]?.text || "";
-      return { response: text };
+      
+      // Convertir respuesta de Anthropic a formato OpenAI/Cloudflare
+      // Anthropic: { content: [{ type: "text", text: "..." }, { type: "tool_use", name: "...", input: {...} }], stop_reason: "tool_use" }
+      // OpenAI: { response: "texto...", tool_calls: [{ function: { name: "...", arguments: "..." } }] }
+      
+      let textContent = "";
+      let toolCalls = [];
+      
+      if (data.content && Array.isArray(data.content)) {
+        for (const block of data.content) {
+          if (block.type === "text") {
+            textContent += block.text;
+          } else if (block.type === "tool_use") {
+            toolCalls.push({
+              id: block.id || "call_" + Math.random().toString(36).substring(7),
+              type: "function",
+              function: {
+                name: block.name,
+                arguments: JSON.stringify(block.input || {})
+              }
+            });
+          }
+        }
+      }
+      
+      // Devolver en formato compatible con el código existente
+      const result = { response: textContent };
+      if (toolCalls.length > 0) {
+        result.tool_calls = toolCalls;
+      }
+      // Compatible con código que busca choices[0].message.tool_calls
+      result.choices = [{
+        message: {
+          content: textContent,
+          tool_calls: toolCalls.length > 0 ? toolCalls : undefined
+        }
+      }];
+      
+      console.log(`[runChatAI] ✅ Anthropic ${claudeModel}: ${textContent.substring(0, 80)}... (tools: ${toolCalls.length})`);
+      return result;
     } catch (e) {
       console.error("[runChatAI] Error Anthropic, fallback a Cloudflare:", e.message);
       return await env2.AI.run(MODEL_ID, { messages, ...options });
@@ -1785,8 +1850,7 @@ var index_default = {
         ];
         
         // 1era llamada: sin stream, con tools
-        const aiResponse = await env2.AI.run(MODEL_ID, {
-          messages: chatMessages,
+        const aiResponse = await runChatAI(env2, chatTenant, chatMessages, {
           tools: CHAT_TOOLS,
           max_tokens: 512
         });
@@ -1803,11 +1867,11 @@ var index_default = {
         
         if (toolCallsArr.length === 0 && userConfirmingAgendar && (botMentionedAgendar || /agendar|cita/i.test(lastUserMsg))) {
           // 2da llamada FORZADA con tool_choice
-          const forcedResponse = await env2.AI.run(MODEL_ID, {
-            messages: [
-              { role: "system", content: systemPrompt + "\n\nIMPORTANTE: El cliente ha confirmado. Debes llamar a la funcion agendar_cita AHORA. Extrae los datos del contexto y llamala." },
-              ...messages.map(m => m.role !== "system" ? m : null).filter(Boolean)
-            ],
+          const forcedMessages = [
+            { role: "system", content: systemPrompt + "\n\nIMPORTANTE: El cliente ha confirmado. Debes llamar a la funcion agendar_cita AHORA. Extrae los datos del contexto y llamala." },
+            ...messages.map(m => m.role !== "system" ? m : null).filter(Boolean)
+          ];
+          const forcedResponse = await runChatAI(env2, chatTenant, forcedMessages, {
             tools: CHAT_TOOLS,
             tool_choice: { type: "function", function: { name: "agendar_cita" } },
             max_tokens: 512
@@ -4373,8 +4437,7 @@ async function handleWhatsAppWebhook(request, env2) {
       }
     ];
     
-    let aiResponse = await env2.AI.run("@cf/meta/llama-3.2-3b-instruct", {
-      messages: chatMessages,
+    let aiResponse = await runChatAI(env2, tenant, chatMessages, {
       tools: TOOLS,
       max_tokens: 512
     });
@@ -4407,8 +4470,7 @@ async function handleWhatsAppWebhook(request, env2) {
         { role: "user", content: text + " (por favor agenda la cita ahora usando la funcion)" }
       ];
       
-      const forcedResponse = await env2.AI.run("@cf/meta/llama-3.2-3b-instruct", {
-        messages: forcedMessages,
+      const forcedResponse = await runChatAI(env2, tenant, forcedMessages, {
         tools: TOOLS,
         tool_choice: { type: "function", function: { name: "agendar_cita" } },
         max_tokens: 512
@@ -4479,8 +4541,7 @@ Si necesitas reprogramar, escribenos por aqui. Cualquier otra consulta con gusto
           // Para verificar_disponibilidad, hacer segunda llamada a IA con el resultado
           chatMessages.push({ role: "assistant", content: aiResponse.response || "Verificando disponibilidad..." });
           chatMessages.push({ role: "user", content: `Resultado de verificar_disponibilidad: ${JSON.stringify(result)}. Responde al cliente segun este resultado.` });
-          const aiResponse2 = await env2.AI.run("@cf/meta/llama-3.2-3b-instruct", {
-            messages: chatMessages,
+          const aiResponse2 = await runChatAI(env2, tenant, chatMessages, {
             tools: TOOLS,
             max_tokens: 512
           });
