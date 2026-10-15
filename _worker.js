@@ -2252,6 +2252,12 @@ var index_default = {
     if (request.method === "OPTIONS") {
       return handleCors();
     }
+    // Redirect 301: dominios viejos -> bot.makeseo.app
+    const host = (request.headers.get("host") || "").toLowerCase();
+    if (host === "sgc-saas.pages.dev" || host === "www.bot.makeseo.app") {
+      const redirectUrl = "https://bot.makeseo.app" + url.pathname + url.search;
+      return Response.redirect(redirectUrl, 301);
+    }
     try {
       // Servir sitemap.xml y robots.txt directamente desde el worker
       if (path === "/sitemap.xml") {
