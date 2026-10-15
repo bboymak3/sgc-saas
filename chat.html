@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex,nofollow">
+<title>Chat — BotWA</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%2322c55e' d='M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z'/%3E%3C/svg%3E">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--green:#22c55e;--green-d:#16a34a;--bg:#0a0a0a;--bg1:#111;--bg2:#1a1a1a;--bg3:#222;--border:#2a2a2a;--text:#e8e8e8;--muted:#999;--dim:#666}
+body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);height:100vh;display:flex;flex-direction:column;overflow:hidden}
+a{color:var(--green);text-decoration:none}
+
+.chat-wrap{flex:1;display:flex;flex-direction:column;max-width:760px;margin:0 auto;width:100%;background:var(--bg)}
+.header{padding:14px 18px;background:var(--bg1);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px}
+.header .avatar{width:42px;height:42px;border-radius:50%;background:linear-gradient(135deg,var(--green),var(--green-d));display:flex;align-items:center;justify-content:center;font-weight:800;color:#042713;font-size:1.2rem}
+.header .info{flex:1;min-width:0}
+.header h3{font-size:.98rem;font-weight:700;line-height:1.2}
+.header .status{font-size:.74rem;color:#6ee7b7;display:flex;align-items:center;gap:5px}
+.header .status .dot{width:7px;height:7px;background:var(--green);border-radius:50%;box-shadow:0 0 6px var(--green);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+.header .back{background:var(--bg2);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:8px;font-size:.8rem;cursor:pointer}
+
+#chat{flex:1;overflow-y:auto;padding:18px;display:flex;flex-direction:column;gap:10px;background:var(--bg);background-image:radial-gradient(rgba(34,197,94,.03) 1px,transparent 1px);background-size:20px 20px}
+.msg{max-width:80%;padding:10px 14px;border-radius:14px;font-size:.9rem;line-height:1.5;white-space:pre-wrap;word-break:break-word;animation:msgIn .3s ease-out}
+@keyframes msgIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.msg.bot{background:var(--bg3);border:1px solid var(--border);border-bottom-left-radius:4px;align-self:flex-start}
+.msg.user{background:var(--green);color:#042713;border-bottom-right-radius:4px;align-self:flex-end;font-weight:500}
+.msg .time{font-size:.65rem;opacity:.6;margin-top:4px;display:block}
+.typing{align-self:flex-start;color:var(--dim);font-size:.82rem;padding:8px 14px;background:var(--bg3);border-radius:12px;border-bottom-left-radius:4px}
+.typing .dots{display:inline-flex;gap:3px;margin-left:6px}
+.typing .dots span{width:6px;height:6px;background:var(--muted);border-radius:50%;animation:typing 1.4s infinite}
+.typing .dots span:nth-child(2){animation-delay:.2s}
+.typing .dots span:nth-child(3){animation-delay:.4s}
+@keyframes typing{0%,60%,100%{opacity:.3}30%{opacity:1}}
+
+.welcome{align-self:center;text-align:center;padding:30px 20px;color:var(--muted);max-width:420px}
+.welcome i{font-size:2.5rem;color:var(--green);margin-bottom:12px;display:block}
+.welcome h3{font-size:1.1rem;font-weight:700;color:#fff;margin-bottom:6px}
+.welcome p{font-size:.86rem;line-height:1.5}
+
+.input-bar{padding:12px 14px;background:var(--bg1);border-top:1px solid var(--border);display:flex;gap:8px}
+.input-bar input{flex:1;padding:12px 16px;background:var(--bg2);border:1px solid var(--border);border-radius:12px;color:#fff;font-size:.92rem;outline:none;font-family:inherit}
+.input-bar input:focus{border-color:var(--green)}
+.input-bar input::placeholder{color:var(--dim)}
+.send-btn{background:var(--green);color:#042713;border:none;padding:0 18px;border-radius:12px;font-weight:700;cursor:pointer;font-size:1.1rem;transition:all .15s;width:48px;display:flex;align-items:center;justify-content:center}
+.send-btn:hover{background:#fff}
+.send-btn:disabled{opacity:.5;cursor:not-allowed}
+
+.suggestions{display:flex;gap:6px;flex-wrap:wrap;padding:0 18px 8px;background:var(--bg1);border-top:1px solid var(--border)}
+.suggestions button{background:var(--bg2);border:1px solid var(--border);color:var(--text);padding:6px 12px;border-radius:14px;font-size:.78rem;cursor:pointer;font-family:inherit;transition:all .15s}
+.suggestions button:hover{border-color:var(--green);color:var(--green)}
+
+.err-screen{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;text-align:center}
+.err-screen i{font-size:3rem;color:var(--dim);margin-bottom:16px}
+.err-screen h2{font-size:1.3rem;font-weight:700;margin-bottom:8px}
+.err-screen p{color:var(--muted);margin-bottom:16px}
+</style>
+</head>
+<body>
+
+<div class="chat-wrap" id="chatWrap">
+  <div class="header">
+    <div class="avatar" id="bizAvatar">B</div>
+    <div class="info">
+      <h3 id="bizName">Cargando...</h3>
+      <div class="status"><span class="dot"></span> En linea</div>
+    </div>
+    <a href="/" class="back"><i class="fas fa-times"></i> Salir</a>
+  </div>
+
+  <div id="chat">
+    <div class="welcome">
+      <i class="fas fa-comment-dots"></i>
+      <h3>Iniciando chat...</h3>
+      <p>Conectando con el asistente IA</p>
+    </div>
+  </div>
+
+  <div class="suggestions hidden" id="suggestions"></div>
+
+  <div class="input-bar">
+    <input type="text" id="msgInput" placeholder="Escribe un mensaje..." autocomplete="off" disabled>
+    <button class="send-btn" id="sendBtn" onclick="sendMessage()" disabled><i class="fas fa-paper-plane"></i></button>
+  </div>
+</div>
+
+<script>
+const API = '';
+let SLUG = '';
+let messages = [];
+let sending = false;
+
+function getSlug(){
+  const p = new URLSearchParams(location.search);
+  return p.get('t') || p.get('tenant') || '';
+}
+
+function init(){
+  SLUG = getSlug();
+  if(!SLUG){
+    document.getElementById('chatWrap').innerHTML = '<div class="err-screen"><i class="fas fa-exclamation-triangle"></i><h2>Falta el identificador</h2><p>Necesitas un enlace valido con <code>?t=SLUG</code></p><a href="/" class="back">Volver al inicio</a></div>';
+    return;
+  }
+
+  // Load tenant info
+  fetch(`${API}/api/tenant/public?t=${SLUG}`)
+    .then(r=>r.json())
+    .then(d=>{
+      if(d.success || d.business_name){
+        const name = d.business_name || d.tenant?.business_name || 'Asistente';
+        document.getElementById('bizName').textContent = name;
+        document.getElementById('bizAvatar').textContent = (name[0]||'B').toUpperCase();
+        document.title = `Chat - ${name}`;
+        startChat(name);
+      } else {
+        // Try with /api/servicios
+        fetch(`${API}/api/servicios?t=${SLUG}`).then(r=>r.json()).then(sd=>{
+          const name = 'Asistente';
+          document.getElementById('bizName').textContent = name;
+          startChat(name);
+        }).catch(()=>{
+          document.getElementById('chatWrap').innerHTML = '<div class="err-screen"><i class="fas fa-exclamation-triangle"></i><h2>Negocio no encontrado</h2><p>No se encontro el negocio: '+esc(SLUG)+'</p></div>';
+        });
+      }
+    })
+    .catch(()=>{
+      // Even if public fails, allow chat (worker may not have /tenant/public)
+      startChat('Asistente');
+    });
+}
+
+function startChat(bizName){
+  document.getElementById('msgInput').disabled = false;
+  document.getElementById('sendBtn').disabled = false;
+  const chat = document.getElementById('chat');
+  chat.innerHTML = '';
+  // Welcome message
+  const welcome = `Hola! Soy el asistente virtual de ${bizName}. Puedo ayudarte a agendar una cita. En que puedo ayudarte hoy?`;
+  appendMsg('bot', welcome);
+  messages.push({role:'assistant', content: welcome});
+
+  // Suggestions
+  const sg = document.getElementById('suggestions');
+  sg.classList.remove('hidden');
+  sg.innerHTML = `
+    <button onclick="quickSend('Quisiera agendar una cita')">Agendar cita</button>
+    <button onclick="quickSend('Ver servicios y precios')">Ver servicios</button>
+    <button onclick="quickSend('Horarios de atencion')">Horarios</button>
+  `;
+
+  document.getElementById('msgInput').focus();
+  document.getElementById('msgInput').addEventListener('keypress', e=>{ if(e.key==='Enter' && !sending) sendMessage(); });
+}
+
+function quickSend(text){
+  document.getElementById('msgInput').value = text;
+  sendMessage();
+}
+
+function appendMsg(role, text){
+  const chat = document.getElementById('chat');
+  const div = document.createElement('div');
+  div.className = 'msg ' + (role==='assistant'?'bot':'user');
+  const time = new Date().toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit'});
+  div.innerHTML = esc(text) + `<span class="time">${time}</span>`;
+  chat.appendChild(div);
+  chat.scrollTop = chat.scrollHeight;
+  return div;
+}
+
+function showTyping(){
+  const chat = document.getElementById('chat');
+  const div = document.createElement('div');
+  div.className = 'typing';
+  div.id = 'typingIndicator';
+  div.innerHTML = 'Escribiendo<span class="dots"><span></span><span></span><span></span></span>';
+  chat.appendChild(div);
+  chat.scrollTop = chat.scrollHeight;
+}
+function hideTyping(){
+  const t = document.getElementById('typingIndicator');
+  if(t) t.remove();
+}
+
+function sendMessage(){
+  const input = document.getElementById('msgInput');
+  const text = input.value.trim();
+  if(!text || sending) return;
+  sending = true;
+  input.value = '';
+  document.getElementById('sendBtn').disabled = true;
+
+  appendMsg('user', text);
+  messages.push({role:'user', content:text});
+
+  showTyping();
+
+  fetch(`${API}/api/chat?t=${SLUG}`, {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({messages})
+  })
+  .then(async r => {
+    const ct = r.headers.get('content-type') || '';
+    if(ct.includes('text/event-stream') || ct.includes('stream')){
+      // SSE streaming response
+      const reader = r.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let fullText = '';
+      let bubble = null;
+      hideTyping();
+      bubble = appendMsg('bot', '');
+      bubble.querySelector('.time')?.remove();
+      const timeSpan = document.createElement('span');
+      timeSpan.className = 'time';
+      timeSpan.textContent = new Date().toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit'});
+      bubble.appendChild(timeSpan);
+
+      while(true){
+        const {done, value} = await reader.read();
+        if(done) break;
+        buffer += decoder.decode(value, {stream:true});
+        const lines = buffer.split('\n');
+        buffer = lines.pop();
+        for(const line of lines){
+          const trimmed = line.trim();
+          if(!trimmed || !trimmed.startsWith('data:')) continue;
+          const payload = trimmed.slice(5).trim();
+          if(payload === '[DONE]') continue;
+          try {
+            const json = JSON.parse(payload);
+            if(json.response && !fullText){
+              fullText = json.response;
+            } else if(json.choices && json.choices[0] && json.choices[0].delta && json.choices[0].delta.content){
+              fullText += json.choices[0].delta.content;
+            }
+            if(fullText){
+              bubble.firstChild.textContent = fullText;
+              document.getElementById('chat').scrollTop = document.getElementById('chat').scrollHeight;
+            }
+          } catch(e){}
+        }
+      }
+      sending = false;
+      document.getElementById('sendBtn').disabled = false;
+      input.focus();
+      if(fullText){
+        messages.push({role:'assistant', content:fullText});
+      } else {
+        bubble.firstChild.textContent = 'Disculpa, no pude procesar tu mensaje. Puedes repetirlo?';
+      }
+    } else {
+      // JSON response
+      const d = await r.json();
+      hideTyping();
+      sending = false;
+      document.getElementById('sendBtn').disabled = false;
+      input.focus();
+      if(d.response){
+        appendMsg('bot', d.response);
+        messages.push({role:'assistant', content:d.response});
+      } else if(d.message){
+        appendMsg('bot', d.message);
+        messages.push({role:'assistant', content:d.message});
+      } else if(d.error){
+        appendMsg('bot', 'Disculpa, hubo un error: ' + d.error);
+      } else {
+        appendMsg('bot', 'Disculpa, no pude procesar tu mensaje. Puedes repetirlo?');
+      }
+    }
+  })
+  .catch(e=>{
+    hideTyping();
+    sending = false;
+    document.getElementById('sendBtn').disabled = false;
+    appendMsg('bot', 'Hubo un problema de conexion. Intenta de nuevo en un momento.');
+  });
+}
+
+function esc(s){ return String(s||'').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+init();
+</script>
+</body>
+</html>

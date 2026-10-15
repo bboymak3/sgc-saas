@@ -1,0 +1,35 @@
+# robots.txt - BotWA (bot.makeseo.app)
+# Asistente de WhatsApp con IA para negocios
+
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /superadmin
+Disallow: /chat
+Disallow: /status
+Disallow: /api/
+
+# Crawlers de IA permitidos
+User-agent: GPTBot
+Allow: /
+
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: anthropic-ai
+Allow: /
+
+User-agent: CCBot
+Allow: /
+
+# Sitemap
+Sitemap: https://bot.makeseo.app/sitemap.xml

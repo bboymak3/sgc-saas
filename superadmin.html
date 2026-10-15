@@ -1,0 +1,2182 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Super Admin — BotWA</title>
+  <meta name="robots" content="noindex,nofollow">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%2322c55e'/%3E%3Cpath d='M32 12c-11 0-20 8.5-20 19 0 3.6 1 7 3 10L12 52l11.5-3c2.8 1.5 6 2.3 9.3 2.3 11 0 20-8.5 20-19S43 12 32 12z' fill='%23fff'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --bg: #0a0a0a;
+      --bg-1: #111111;
+      --bg-2: #1a1a1a;
+      --bg-3: #222222;
+      --border: #2a2a2a;
+      --border-light: #3a3a3a;
+      --text: #e8e8e8;
+      --text-muted: #999;
+      --text-dim: #666;
+      --primary: #22c55e;
+      --primary-dark: #16a34a;
+      --primary-darker: #15803d;
+      --danger: #ef4444;
+      --warn: #fbbf24;
+      --info: #3b82f6;
+      --orange: #fb923c;
+      --radius: 14px;
+      --radius-sm: 10px;
+      --shadow: 0 10px 40px rgba(0,0,0,0.4);
+    }
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg); color: var(--text);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+      min-height: 100vh;
+    }
+    .container { max-width: 1400px; margin: 0 auto; padding: 0 24px; }
+
+    /* ===== Login ===== */
+    .login-wrap {
+      min-height: 100vh; display: flex; align-items: center; justify-content: center;
+      padding: 24px;
+    }
+    .login-card {
+      background: var(--bg-1); border: 1px solid var(--border); border-radius: var(--radius);
+      padding: 40px; max-width: 420px; width: 100%; box-shadow: var(--shadow);
+      animation: fadeUp 0.4s ease;
+    }
+    @keyframes fadeUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    .login-card .logo-mark {
+      width: 56px; height: 56px; border-radius: 14px;
+      background: linear-gradient(135deg, var(--primary), var(--primary-darker));
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 6px 24px rgba(34,197,94,0.4);
+      margin: 0 auto 18px;
+    }
+    .login-card .logo-mark svg { width: 32px; height: 32px; }
+    .login-card h1 { text-align: center; font-size: 1.4rem; font-weight: 800; color: #fff; letter-spacing: -0.5px; }
+    .login-card h1 .accent { color: var(--primary); }
+    .login-card .subtitle { text-align: center; color: var(--text-muted); font-size: 0.9rem; margin: 4px 0 24px; }
+    .login-card label { display: block; font-size: 0.85rem; color: var(--text-muted); margin-bottom: 6px; font-weight: 500; }
+    .login-card input {
+      width: 100%; background: var(--bg-2); border: 1px solid var(--border-light);
+      color: #fff; padding: 12px 14px; border-radius: var(--radius-sm); font-size: 0.95rem;
+      outline: none; transition: border-color 0.15s;
+    }
+    .login-card input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(34,197,94,0.15); }
+    .login-card .btn {
+      width: 100%; background: linear-gradient(135deg, var(--primary), var(--primary-darker));
+      color: #fff; border: none; padding: 12px; border-radius: var(--radius-sm);
+      font-weight: 700; font-size: 0.95rem; cursor: pointer; margin-top: 16px;
+      transition: transform 0.1s, box-shadow 0.2s;
+    }
+    .login-card .btn:hover { box-shadow: 0 6px 20px rgba(34,197,94,0.35); }
+    .login-card .btn:active { transform: translateY(1px); }
+    .login-error {
+      background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.4);
+      color: var(--danger); padding: 10px 12px; border-radius: var(--radius-sm);
+      font-size: 0.85rem; margin-top: 12px; display: none;
+    }
+    .login-error.show { display: block; animation: shake 0.4s; }
+    @keyframes shake { 0%,100% { transform: translateX(0); } 25% { transform: translateX(-6px); } 75% { transform: translateX(6px); } }
+
+    /* ===== Header ===== */
+    header {
+      background: var(--bg-1); border-bottom: 1px solid var(--border);
+      position: sticky; top: 0; z-index: 50;
+    }
+    .header-inner {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 0; gap: 16px;
+    }
+    .brand { display: flex; align-items: center; gap: 12px; }
+    .logo-mark {
+      width: 38px; height: 38px; border-radius: 10px;
+      background: linear-gradient(135deg, var(--primary), var(--primary-darker));
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 6px 20px rgba(34,197,94,0.35);
+    }
+    .logo-mark svg { width: 24px; height: 24px; }
+    .brand-text .brand-name { font-weight: 800; color: #fff; font-size: 1.15rem; letter-spacing: -0.5px; }
+    .brand-text .brand-name .accent { color: var(--primary); }
+    .brand-text .tenant-name { color: var(--text-muted); font-size: 0.85rem; }
+    .header-actions { display: flex; align-items: center; gap: 10px; }
+    .btn-logout {
+      background: var(--bg-2); border: 1px solid var(--border-light); color: var(--text-muted);
+      padding: 8px 14px; border-radius: var(--radius-sm); font-size: 0.85rem; cursor: pointer;
+      transition: all 0.15s;
+    }
+    .btn-logout:hover { background: var(--bg-3); color: #fff; }
+    .refresh-pill {
+      background: var(--bg-2); border: 1px solid var(--border);
+      padding: 6px 12px; border-radius: 999px;
+      font-size: 0.8rem; color: var(--text-muted);
+      display: inline-flex; align-items: center; gap: 6px;
+    }
+    .refresh-pill .dot { width: 6px; height: 6px; background: var(--primary); border-radius: 50%; animation: pulse 2s infinite; }
+    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+    .btn-refresh {
+      background: var(--bg-2); border: 1px solid var(--border-light); color: var(--text-muted);
+      padding: 8px 14px; border-radius: var(--radius-sm); font-size: 0.85rem; cursor: pointer;
+      transition: all 0.15s; display: inline-flex; align-items: center; gap: 6px;
+    }
+    .btn-refresh:hover { background: var(--bg-3); color: #fff; }
+
+    /* ===== Responsive header (mobile-first) ===== */
+    @media (max-width: 720px) {
+      .container { padding: 0 14px; }
+      .header-inner { padding: 10px 0; gap: 8px; flex-wrap: wrap; }
+      .brand { gap: 8px; min-width: 0; flex: 1 1 auto; }
+      .logo-mark { width: 32px; height: 32px; border-radius: 8px; }
+      .logo-mark svg { width: 20px; height: 20px; }
+      .brand-text .brand-name { font-size: 1rem; }
+      .brand-text .tenant-name { font-size: 0.72rem; }
+      .header-actions { gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+      .btn-refresh, .btn-logout { padding: 6px 10px; font-size: 0.78rem; }
+    }
+    @media (max-width: 480px) {
+      .header-actions .btn-refresh,
+      .header-actions .btn-logout { padding: 6px 9px; font-size: 0.74rem; }
+      .brand-text .tenant-name { display: none; }
+    }
+
+    /* ===== Stats grid ===== */
+    .stats-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 14px; padding: 24px 0;
+    }
+    .stat-card {
+      background: var(--bg-1); border: 1px solid var(--border); border-radius: var(--radius);
+      padding: 18px 20px; transition: transform 0.15s, border-color 0.15s;
+    }
+    .stat-card:hover { border-color: var(--border-light); transform: translateY(-2px); }
+    .stat-card .stat-label {
+      color: var(--text-muted); font-size: 0.78rem; font-weight: 500;
+      text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    .stat-card .stat-value {
+      font-size: 2rem; font-weight: 800; color: #fff; margin-top: 6px; letter-spacing: -1px;
+    }
+    .stat-card .stat-icon { font-size: 1.1rem; margin-right: 6px; }
+    .stat-card.accent { border-color: rgba(34,197,94,0.4); }
+    .stat-card.accent .stat-value { color: var(--primary); }
+    .stat-card.warn { border-color: rgba(251,191,36,0.4); }
+    .stat-card.warn .stat-value { color: var(--warn); }
+    .stat-card.info { border-color: rgba(59,130,246,0.4); }
+    .stat-card.info .stat-value { color: var(--info); }
+    .stat-card.orange { border-color: rgba(251,146,60,0.4); }
+    .stat-card.orange .stat-value { color: var(--orange); }
+
+    /* ===== Section heading ===== */
+    .section-heading {
+      display: flex; align-items: center; justify-content: space-between;
+      margin: 8px 0 14px; gap: 16px;
+    }
+    .section-heading h2 { font-size: 1.1rem; font-weight: 700; color: #fff; }
+    .section-heading .count-pill {
+      background: var(--bg-2); border: 1px solid var(--border);
+      padding: 4px 10px; border-radius: 999px; font-size: 0.8rem; color: var(--text-muted);
+      font-weight: 600;
+    }
+
+    /* ===== Tenant cards ===== */
+    .tenants-grid {
+      display: grid; grid-template-columns: 1fr; gap: 14px; padding-bottom: 40px;
+    }
+    @media (min-width: 900px) { .tenants-grid { grid-template-columns: 1fr 1fr; } }
+    .tenant-card {
+      background: var(--bg-1); border: 1px solid var(--border); border-radius: var(--radius);
+      padding: 18px; transition: border-color 0.15s, transform 0.1s;
+      animation: fadeUp 0.3s ease both;
+    }
+    .tenant-card:hover { border-color: var(--border-light); }
+    .tenant-card.pending { border-left: 3px solid var(--orange); }
+    .tenant-card.rejected { border-left: 3px solid var(--danger); }
+    .tenant-card.suspended { border-left: 3px solid var(--text-dim); }
+    .tenant-card.active, .tenant-card.approved { border-left: 3px solid var(--primary); }
+
+    .tenant-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+    .tenant-head .left { display: flex; align-items: flex-start; gap: 12px; min-width: 0; }
+    .tenant-head .rubro-icon {
+      width: 42px; height: 42px; border-radius: 10px;
+      background: var(--bg-2); border: 1px solid var(--border-light);
+      display: flex; align-items: center; justify-content: center; font-size: 1.3rem; flex-shrink: 0;
+    }
+    .tenant-head .info { min-width: 0; }
+    .tenant-head .info h3 {
+      font-size: 1.05rem; font-weight: 700; color: #fff; letter-spacing: -0.3px;
+      word-wrap: break-word;
+    }
+    .tenant-head .info .meta { color: var(--text-muted); font-size: 0.82rem; margin-top: 2px; }
+    .tenant-head .info .meta code { color: var(--primary); font-weight: 600; }
+
+    .status-badge {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 4px 10px; border-radius: 999px; font-size: 0.72rem; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.5px; white-space: nowrap;
+    }
+    .status-badge.active { background: rgba(34,197,94,0.15); color: var(--primary); border: 1px solid rgba(34,197,94,0.4); }
+    .status-badge.approved { background: rgba(251,191,36,0.15); color: var(--warn); border: 1px solid rgba(251,191,36,0.4); }
+    .status-badge.pending { background: rgba(251,146,60,0.15); color: var(--orange); border: 1px solid rgba(251,146,60,0.4); }
+    .status-badge.pending_approval { background: rgba(251,146,60,0.15); color: var(--orange); border: 1px solid rgba(251,146,60,0.4); }
+    .status-badge.rejected { background: rgba(239,68,68,0.15); color: var(--danger); border: 1px solid rgba(239,68,68,0.4); }
+    .status-badge.suspended { background: rgba(102,102,102,0.15); color: var(--text-dim); border: 1px solid rgba(102,102,102,0.4); }
+    .status-badge::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+    /* ===== MEJORA ON/OFF: Toggle switch iOS-style ===== */
+    .tenant-card.bot-paused {
+      background: linear-gradient(180deg, rgba(239,68,68,0.04), var(--bg-1));
+      border-left-width: 3px;
+      border-left-color: var(--danger) !important;
+      opacity: 0.92;
+    }
+    .tenant-head .right-col {
+      display: flex; flex-direction: column; align-items: flex-end; gap: 8px;
+      flex-shrink: 0;
+    }
+    .bot-toggle-wrap {
+      display: flex; align-items: center; gap: 8px; cursor: pointer;
+      padding: 4px 8px; border-radius: 999px; transition: background 0.15s;
+    }
+    .bot-toggle-wrap:hover { background: var(--bg-2); }
+    .bot-toggle-wrap .toggle-label {
+      font-size: 0.72rem; font-weight: 800; letter-spacing: 0.5px;
+      text-transform: uppercase; min-width: 24px; text-align: right;
+    }
+    .bot-toggle-wrap .toggle-label.on { color: var(--primary); }
+    .bot-toggle-wrap .toggle-label.off { color: var(--text-dim); }
+    .toggle {
+      position: relative; width: 42px; height: 24px; background: var(--bg-3);
+      border-radius: 999px; transition: background 0.25s; flex-shrink: 0;
+      border: 1px solid var(--border-light);
+    }
+    .toggle.on { background: var(--primary); border-color: var(--primary-dark); }
+    .toggle .knob {
+      position: absolute; top: 1px; left: 1px; width: 20px; height: 20px;
+      background: #fff; border-radius: 50%; transition: transform 0.25s;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+    }
+    .toggle.on .knob { transform: translateX(18px); }
+    .bot-toggle-wrap.loading { opacity: 0.5; pointer-events: none; }
+    .bot-toggle-wrap.loading .toggle { animation: pulseToggle 1s infinite; }
+    @keyframes pulseToggle { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+    .tenant-meta-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+      gap: 10px; margin: 12px 0;
+    }
+    .meta-cell {
+      background: var(--bg-2); border: 1px solid var(--border);
+      border-radius: var(--radius-sm); padding: 8px 10px;
+    }
+    .meta-cell .label { color: var(--text-dim); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.5px; }
+    .meta-cell .value { color: #fff; font-size: 1.1rem; font-weight: 700; margin-top: 2px; }
+    .meta-cell .value.muted { color: var(--text-muted); font-size: 0.85rem; font-weight: 500; word-break: break-all; }
+    .meta-cell .value.small { font-size: 0.85rem; font-weight: 500; }
+    .meta-cell .value.success { color: var(--primary); }
+    .meta-cell .value.warn { color: var(--warn); }
+
+    .actions-row {
+      display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px;
+      padding-top: 12px; border-top: 1px solid var(--border);
+    }
+    .btn {
+      background: var(--bg-2); border: 1px solid var(--border-light); color: var(--text);
+      padding: 7px 11px; border-radius: var(--radius-sm); font-size: 0.8rem; cursor: pointer;
+      transition: all 0.15s; display: inline-flex; align-items: center; gap: 5px;
+      font-weight: 500; text-decoration: none;
+    }
+    .btn:hover { background: var(--bg-3); border-color: var(--text-muted); }
+    .btn.primary { background: rgba(34,197,94,0.15); border-color: rgba(34,197,94,0.4); color: var(--primary); }
+    .btn.primary:hover { background: var(--primary); color: #fff; }
+    .btn.warn { background: rgba(251,191,36,0.15); border-color: rgba(251,191,36,0.4); color: var(--warn); }
+    .btn.warn:hover { background: var(--warn); color: #000; }
+    .btn.danger { background: rgba(239,68,68,0.15); border-color: rgba(239,68,68,0.4); color: var(--danger); }
+    .btn.danger:hover { background: var(--danger); color: #fff; }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn:disabled:hover { background: var(--bg-2); border-color: var(--border-light); color: var(--text); }
+    .btn.info { background: rgba(59,130,246,0.15); border-color: rgba(59,130,246,0.4); color: var(--info); }
+    .btn.info:hover { background: var(--info); color: #fff; }
+
+    /* ===== Responsive tenant cards (mobile) ===== */
+    @media (max-width: 600px) {
+      .tenant-card { padding: 14px; }
+      .tenant-head { flex-direction: column; align-items: stretch; gap: 10px; }
+      .tenant-head .right-col { flex-direction: row; align-items: center; justify-content: space-between; width: 100%; }
+      .tenant-meta-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+      .meta-cell { padding: 7px 9px; }
+      .meta-cell .value { font-size: 1rem; }
+      .actions-row .btn { font-size: 0.74rem; padding: 6px 9px; flex: 1 1 auto; justify-content: center; min-width: 0; }
+    }
+
+    /* Category badge shown on each tenant card */
+    .cat-badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: rgba(59,130,246,0.12); border: 1px solid rgba(59,130,246,0.35);
+      color: var(--info); padding: 4px 10px; border-radius: 999px;
+      font-size: 0.74rem; font-weight: 600; margin-top: 6px;
+      max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      cursor: pointer; transition: all 0.15s; user-select: none;
+    }
+    .cat-badge::before { content: "🏷️"; flex-shrink: 0; }
+    .cat-badge .cat-edit { font-size: 0.7rem; opacity: 0.7; margin-left: 2px; }
+    .cat-badge:hover { background: rgba(59,130,246,0.25); border-color: var(--info); transform: translateY(-1px); }
+    .cat-badge:hover .cat-edit { opacity: 1; }
+    .cat-badge:active { transform: translateY(0); }
+
+    /* ===== Loading / empty states ===== */
+    .center-msg {
+      text-align: center; padding: 60px 20px; color: var(--text-muted);
+    }
+    .center-msg .big { font-size: 2.5rem; margin-bottom: 10px; }
+    .spinner-inline {
+      width: 24px; height: 24px; border: 3px solid var(--border); border-top-color: var(--primary);
+      border-radius: 50%; animation: spin 0.8s linear infinite; display: inline-block;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .toast {
+      position: fixed; bottom: 24px; right: 24px; z-index: 200;
+      background: var(--bg-1); border: 1px solid var(--border); border-radius: var(--radius);
+      padding: 14px 18px; box-shadow: var(--shadow); max-width: 340px;
+      display: flex; align-items: center; gap: 10px; font-size: 0.9rem;
+      animation: slideIn 0.3s ease;
+    }
+    @keyframes slideIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+    .toast.success { border-color: rgba(34,197,94,0.5); }
+    .toast.success .icon { color: var(--primary); }
+    .toast.error { border-color: rgba(239,68,68,0.5); }
+    .toast.error .icon { color: var(--danger); }
+    .toast.info { border-color: rgba(59,130,246,0.5); }
+    .toast.info .icon { color: var(--info); }
+
+    /* ===== Modal ===== */
+    .modal-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.75);
+      display: none; align-items: flex-start; justify-content: center;
+      z-index: 100; padding: 24px; overflow-y: auto;
+      backdrop-filter: blur(2px);
+    }
+    .modal-overlay.show { display: flex; animation: fadeIn 0.2s; }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    .modal {
+      background: var(--bg-1); border: 1px solid var(--border); border-radius: var(--radius);
+      max-width: 560px; width: 100%; box-shadow: var(--shadow);
+      animation: fadeUp 0.25s ease; margin: auto;
+    }
+    .modal.wide { max-width: 800px; }
+    .modal-head {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 16px 20px; border-bottom: 1px solid var(--border); gap: 12px;
+    }
+    .modal-head h3 { font-size: 1.05rem; font-weight: 700; color: #fff; }
+    .modal-head .sub { color: var(--text-muted); font-size: 0.82rem; margin-top: 2px; }
+    .modal-close {
+      background: var(--bg-2); border: 1px solid var(--border-light); color: var(--text-muted);
+      width: 32px; height: 32px; border-radius: 8px; cursor: pointer; font-size: 1.1rem;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .modal-close:hover { background: var(--bg-3); color: #fff; }
+    .modal-body { padding: 20px; }
+    .modal-body.center { text-align: center; }
+    .modal-foot {
+      padding: 14px 20px; border-top: 1px solid var(--border);
+      display: flex; justify-content: flex-end; gap: 8px;
+    }
+
+    /* QR modal */
+    .qr-wrap {
+      display: flex; flex-direction: column; align-items: center; gap: 16px; padding: 8px 0;
+    }
+    .qr-img-box {
+      background: #fff; padding: 12px; border-radius: 12px;
+      box-shadow: 0 6px 24px rgba(0,0,0,0.4);
+    }
+    .qr-img-box img { width: 240px; height: 240px; display: block; }
+    .qr-img-box.placeholder { width: 264px; height: 264px; display: flex; align-items: center; justify-content: center; }
+    .qr-instructions {
+      background: var(--bg-2); border: 1px solid var(--border); border-radius: var(--radius-sm);
+      padding: 12px 14px; font-size: 0.85rem; color: var(--text-muted); text-align: left;
+    }
+    .qr-instructions ol { padding-left: 18px; margin: 6px 0; }
+    .qr-instructions li { margin: 3px 0; }
+    .qr-instance-info {
+      font-family: monospace; font-size: 0.8rem; color: var(--text-dim); text-align: center;
+      word-break: break-all;
+    }
+
+    /* Citas modal */
+    .citas-filters {
+      display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px;
+    }
+    .filter-btn {
+      background: var(--bg-2); border: 1px solid var(--border); color: var(--text-muted);
+      padding: 6px 12px; border-radius: 999px; font-size: 0.78rem; cursor: pointer;
+      transition: all 0.15s; font-weight: 500;
+    }
+    .filter-btn:hover { color: #fff; border-color: var(--text-muted); }
+    .filter-btn.active { background: var(--primary); color: #000; border-color: var(--primary); }
+    .citas-table-wrap { overflow-x: auto; }
+    table.citas-table {
+      width: 100%; border-collapse: collapse; font-size: 0.85rem;
+    }
+    table.citas-table th, table.citas-table td {
+      padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border);
+    }
+    table.citas-table th {
+      color: var(--text-muted); font-weight: 600; font-size: 0.72rem;
+      text-transform: uppercase; letter-spacing: 0.5px; background: var(--bg-2);
+      position: sticky; top: 0;
+    }
+    table.citas-table td { color: var(--text); }
+    table.citas-table tr:hover td { background: rgba(255,255,255,0.02); }
+    .mini-badge {
+      display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 0.7rem; font-weight: 700;
+      text-transform: uppercase;
+    }
+    .mini-badge.pendiente { background: rgba(251,146,60,0.15); color: var(--orange); }
+    .mini-badge.aprobada { background: rgba(34,197,94,0.15); color: var(--primary); }
+    .mini-badge.rechazada { background: rgba(239,68,68,0.15); color: var(--danger); }
+    .mini-badge.confirmada { background: rgba(34,197,94,0.15); color: var(--primary); }
+    .mini-badge.cancelada { background: rgba(102,102,102,0.15); color: var(--text-dim); }
+
+    /* Form */
+    .form-group { margin-bottom: 14px; }
+    .form-group label {
+      display: block; font-size: 0.82rem; color: var(--text-muted); margin-bottom: 6px;
+      font-weight: 500;
+    }
+    .form-group label .req { color: var(--danger); margin-left: 2px; }
+    .form-group input, .form-group select {
+      width: 100%; background: var(--bg-2); border: 1px solid var(--border-light);
+      color: #fff; padding: 10px 12px; border-radius: var(--radius-sm); font-size: 0.92rem;
+      outline: none; transition: border-color 0.15s; font-family: inherit;
+    }
+    .form-group input:focus, .form-group select:focus {
+      border-color: var(--primary); box-shadow: 0 0 0 3px rgba(34,197,94,0.12);
+    }
+    .form-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    @media (max-width: 600px) { .form-grid-2 { grid-template-columns: 1fr; } }
+
+    .loading-shimmer {
+      display: inline-block; color: var(--text-muted); font-style: italic;
+    }
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+
+  <!-- ===== LOGIN SCREEN ===== -->
+  <div id="loginScreen" class="login-wrap">
+    <div class="login-card">
+      <div class="logo-mark">
+        <svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+          <path d="M32 12c-11 0-20 8.5-20 19 0 3.6 1 7 3 10L12 52l11.5-3c2.8 1.5 6 2.3 9.3 2.3 11 0 20-8.5 20-19S43 12 32 12z" fill="#fff"/>
+        </svg>
+      </div>
+      <h1>Bot<span class="accent">WA</span></h1>
+      <p class="subtitle">Super Admin — Acceso restringido</p>
+      <form id="loginForm" autocomplete="off">
+        <label for="pwdInput">Contraseña</label>
+        <input type="password" id="pwdInput" placeholder="Ingresa tu contraseña" autofocus>
+        <button type="submit" class="btn">Entrar →</button>
+      </form>
+      <div id="loginError" class="login-error">❌ Contraseña incorrecta. Intenta de nuevo.</div>
+    </div>
+  </div>
+
+  <!-- ===== MAIN APP ===== -->
+  <div id="app" class="hidden">
+    <header>
+      <div class="container header-inner">
+        <div class="brand">
+          <div class="logo-mark">
+            <svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+              <path d="M32 12c-11 0-20 8.5-20 19 0 3.6 1 7 3 10L12 52l11.5-3c2.8 1.5 6 2.3 9.3 2.3 11 0 20-8.5 20-19S43 12 32 12z" fill="#fff"/>
+            </svg>
+          </div>
+          <div class="brand-text">
+            <div class="brand-name">Bot<span class="accent">WA</span></div>
+            <div class="tenant-name">Super Admin — Gestión de Plataforma</div>
+          </div>
+        </div>
+        <div class="header-actions">
+          <button class="btn-refresh" onclick="loadTenants()" title="Recargar ahora">↻ Refrescar</button>
+          <button class="btn-refresh" onclick="openTemplatesModal()" title="Plantillas de prompt por categoría">📋 Plantillas</button>
+          <button class="btn-logout" onclick="logout()">Cerrar sesión</button>
+        </div>
+      </div>
+    </header>
+
+    <div class="container">
+      <!-- Stats grid -->
+      <div class="stats-grid" id="statsGrid">
+        <div class="stat-card"><div class="stat-label">Total de negocios</div><div class="stat-value" id="stat-total">–</div></div>
+        <div class="stat-card accent"><div class="stat-label">Activos</div><div class="stat-value" id="stat-active">–</div></div>
+        <div class="stat-card orange"><div class="stat-label">Pendientes</div><div class="stat-value" id="stat-pending">–</div></div>
+        <div class="stat-card info"><div class="stat-label">Total de citas</div><div class="stat-value" id="stat-citas">–</div></div>
+        <div class="stat-card warn"><div class="stat-label">Conversaciones</div><div class="stat-value" id="stat-conv">–</div></div>
+      </div>
+
+      <!-- Section heading -->
+      <div class="section-heading">
+        <h2>Negocios</h2>
+        <span class="count-pill" id="tenantsCount">–</span>
+      </div>
+
+      <!-- Tenants grid -->
+      <div class="tenants-grid" id="tenantsGrid">
+        <div class="center-msg"><span class="spinner-inline"></span><div style="margin-top:10px;">Cargando negocios…</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== QR MODAL ===== -->
+  <div class="modal-overlay" id="qrModal">
+    <div class="modal">
+      <div class="modal-head">
+        <div>
+          <h3>📱 Código QR — <span id="qrTenantName"></span></h3>
+          <div class="sub" id="qrInstanceLabel"></div>
+        </div>
+        <button class="modal-close" onclick="closeModal('qrModal')">×</button>
+      </div>
+      <div class="modal-body center" id="qrModalBody">
+        <div class="qr-wrap">
+          <div class="qr-img-box placeholder"><span class="spinner-inline"></span></div>
+          <div class="loading-shimmer">Obteniendo QR…</div>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn" onclick="refreshQR()">↻ Refrescar QR</button>
+        <button class="btn primary" id="qrDownloadBtn" onclick="downloadQR()" disabled>⬇ Descargar QR</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== CITAS MODAL ===== -->
+  <div class="modal-overlay" id="citasModal">
+    <div class="modal wide">
+      <div class="modal-head">
+        <div>
+          <h3>📅 Citas — <span id="citasTenantName"></span></h3>
+          <div class="sub" id="citasCount"></div>
+        </div>
+        <button class="modal-close" onclick="closeModal('citasModal')">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="citas-filters">
+          <button class="filter-btn active" data-filter="todas" onclick="setCitasFilter('todas')">Todas</button>
+          <button class="filter-btn" data-filter="pendiente" onclick="setCitasFilter('pendiente')">Pendientes</button>
+          <button class="filter-btn" data-filter="aprobada" onclick="setCitasFilter('aprobada')">Aprobadas</button>
+          <button class="filter-btn" data-filter="rechazada" onclick="setCitasFilter('rechazada')">Rechazadas</button>
+          <button class="filter-btn" data-filter="confirmada" onclick="setCitasFilter('confirmada')">Confirmadas</button>
+        </div>
+        <div class="citas-table-wrap" id="citasTableWrap">
+          <div class="center-msg"><span class="spinner-inline"></span></div>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn primary" onclick="showCreateCita(currentCitasSlug)">➕ Crear cita</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== CREATE CITA MODAL ===== -->
+  <div class="modal-overlay" id="createCitaModal">
+    <div class="modal">
+      <div class="modal-head">
+        <div>
+          <h3>➕ Crear cita — <span id="createCitaTenantName"></span></h3>
+          <div class="sub">Completa los datos del cliente</div>
+        </div>
+        <button class="modal-close" onclick="closeModal('createCitaModal')">×</button>
+      </div>
+      <div class="modal-body">
+        <form id="createCitaForm" onsubmit="submitCreateCita(event)">
+          <input type="hidden" id="createCitaSlug">
+          <div class="form-grid-2">
+            <div class="form-group">
+              <label>Fecha <span class="req">*</span></label>
+              <input type="date" id="citaFecha" required>
+            </div>
+            <div class="form-group">
+              <label>Hora <span class="req">*</span></label>
+              <input type="time" id="citaHora" required>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Servicio <span class="req">*</span></label>
+            <select id="citaServicio" required>
+              <option value="">Cargando servicios…</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Nombre del cliente <span class="req">*</span></label>
+            <input type="text" id="citaNombre" placeholder="Ej: Juan Pérez" required>
+          </div>
+          <div class="form-grid-2">
+            <div class="form-group">
+              <label>Teléfono <span class="req">*</span></label>
+              <input type="tel" id="citaTelefono" placeholder="Ej: 56987654321" required>
+            </div>
+            <div class="form-group">
+              <label>Patente (opcional)</label>
+              <input type="text" id="citaPatente" placeholder="Ej: ABCD12">
+            </div>
+          </div>
+          <div id="createCitaError" class="login-error"></div>
+        </form>
+      </div>
+      <div class="modal-foot">
+        <button class="btn" onclick="closeModal('createCitaModal')">Cancelar</button>
+        <button class="btn primary" onclick="document.getElementById('createCitaForm').requestSubmit()">Crear cita</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== CONFIRM MODAL ===== -->
+  <div class="modal-overlay" id="confirmModal">
+    <div class="modal">
+      <div class="modal-head">
+        <div><h3 id="confirmTitle">Confirmar</h3></div>
+        <button class="modal-close" onclick="closeModal('confirmModal')">×</button>
+      </div>
+      <div class="modal-body" id="confirmBody">¿Estás seguro?</div>
+      <div class="modal-foot">
+        <button class="btn" onclick="closeModal('confirmModal')">Cancelar</button>
+        <button class="btn danger" id="confirmActionBtn">Confirmar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== TEMPLATES MODAL (MEJORA 14) ===== -->
+  <div class="modal-overlay" id="templatesModal">
+    <div class="modal wide">
+      <div class="modal-head">
+        <div>
+          <h3>📋 Plantillas de prompt por categoría</h3>
+          <div class="sub">Edita el prompt default que se aplica a los negocios de cada rubro. Usa <code>{business_name}</code> y <code>{servicios}</code> como variables.</div>
+        </div>
+        <button class="modal-close" onclick="closeModal('templatesModal')">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-grid-2" style="margin-bottom:14px;">
+          <div>
+            <label for="tplCategoria" style="color:var(--text-muted);font-size:0.85rem;display:block;margin-bottom:6px;">Categoría (78 rubros)</label>
+            <select id="tplCategoria" onchange="onTemplateCategoriaChange()" style="width:100%;background:var(--bg-2);border:1px solid var(--border-light);color:#fff;padding:10px;border-radius:10px;">
+              <option value="">— Selecciona una categoría —</option>
+            </select>
+          </div>
+          <div>
+            <label style="color:var(--text-muted);font-size:0.85rem;display:block;margin-bottom:6px;">Estado</label>
+            <div id="tplEstado" style="background:var(--bg-2);border:1px solid var(--border);padding:10px;border-radius:10px;font-size:0.85rem;color:var(--text-muted);">—</div>
+          </div>
+        </div>
+        <div style="margin-bottom:10px;">
+          <label for="tplPrompt" style="color:var(--text-muted);font-size:0.85rem;display:block;margin-bottom:6px;">Prompt de la plantilla</label>
+          <textarea id="tplPrompt" rows="14" placeholder="Selecciona una categoría para cargar o generar el prompt…" style="width:100%;background:var(--bg-2);border:1px solid var(--border-light);color:#fff;padding:12px;border-radius:10px;font-family:monospace;font-size:0.82rem;line-height:1.5;resize:vertical;"></textarea>
+        </div>
+        <div id="tplError" class="login-error" style="margin-top:8px;"></div>
+      </div>
+      <div class="modal-foot" style="flex-wrap:wrap;gap:8px;">
+        <button class="btn" onclick="closeModal('templatesModal')">Cerrar</button>
+        <button class="btn danger" id="tplDeleteBtn" onclick="deleteTemplate()" disabled>🗑 Eliminar</button>
+        <span style="flex:1;"></span>
+        <button class="btn warn" id="tplApplyBtn" onclick="applyTemplateToTenants()" disabled>⚡ Aplicar a todos los negocios de esta categoría</button>
+        <button class="btn primary" id="tplSaveBtn" onclick="saveTemplate()" disabled>💾 Guardar plantilla</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== CHANGE CATEGORIA MODAL (TAREA 3a) ===== -->
+  <div class="modal-overlay" id="categoriaModal">
+    <div class="modal">
+      <div class="modal-head">
+        <div>
+          <h3>🏷️ Cambiar categoría — <span id="categoriaTenantName"></span></h3>
+          <div class="sub">Cambia la categoría del negocio. Se aplicará automáticamente la plantilla de prompt correspondiente.</div>
+        </div>
+        <button class="modal-close" onclick="closeModal('categoriaModal')">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>Categoría actual</label>
+          <div id="categoriaActual" style="background:var(--bg-2);border:1px solid var(--border);padding:10px 12px;border-radius:10px;font-size:0.9rem;color:var(--text-muted);">—</div>
+        </div>
+        <div class="form-group">
+          <label for="categoriaSelect">Nueva categoría <span class="req">*</span></label>
+          <select id="categoriaSelect" required>
+            <option value="">— Selecciona una categoría —</option>
+          </select>
+          <div class="hint" style="font-size:0.78rem;color:var(--text-dim);margin-top:5px;">Al cambiar, se actualiza el rubro del negocio y se aplica la plantilla de prompt correspondiente (si no existe, se genera una por defecto).</div>
+        </div>
+        <div id="categoriaError" class="login-error"></div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn" onclick="closeModal('categoriaModal')">Cancelar</button>
+        <button class="btn primary" id="categoriaSaveBtn" onclick="saveCategoria()">💾 Cambiar categoría</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== MODELO IA MODAL (selector de proveedor/modelo por tenant) ===== -->
+  <div class="modal-overlay" id="aiModelModal">
+    <div class="modal">
+      <div class="modal-head">
+        <div>
+          <h3>⚡ Modelo de IA — <span id="aiModelTenantSlug"></span></h3>
+          <div class="sub">Configura qué proveedor de IA usa este tenant. Cloudflare es gratis (Llama 3.2 3B). Anthropic Claude requiere API key del tenant.</div>
+        </div>
+        <button class="modal-close" onclick="closeModal('aiModelModal')">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="aiProviderSelect">Proveedor de IA <span class="req">*</span></label>
+          <select id="aiProviderSelect" required onchange="toggleApiKeyVisibility()">
+            <option value="cloudflare">☁️ Cloudflare Workers AI (Gratis — Llama 3.2 3B)</option>
+            <option value="anthropic">🟠 Anthropic Claude (Mejor calidad — requiere API key)</option>
+          </select>
+          <div class="hint" style="font-size:0.78rem;color:var(--text-dim);margin-top:5px;">
+            Cloudflare: gratis, modelo Llama 3.2 3B, 10k neuronos/día.<br>
+            Anthropic: mejor calidad (Claude 3.5 Haiku/Sonnet), requiere API key del cliente.
+          </div>
+        </div>
+        <div class="form-group" id="aiModelGroup" style="display:none;">
+          <label for="aiModelInput">Modelo específico (opcional)</label>
+          <input type="text" id="aiModelInput" placeholder="Ej: claude-3-5-haiku-latest, claude-3-5-sonnet-latest">
+          <div class="hint" style="font-size:0.78rem;color:var(--text-dim);margin-top:5px;">
+            Si lo dejas vacío, se usará el modelo default según el proveedor.
+          </div>
+        </div>
+        <div class="form-group" id="apiKeyGroup" style="display:none;">
+          <label for="apiKeyInput">Anthropic API Key <span class="req">*</span></label>
+          <input type="password" id="apiKeyInput" placeholder="sk-ant-api03-...">
+          <div class="hint" style="font-size:0.78rem;color:var(--text-dim);margin-top:5px;">
+            Obtén tu API key en <a href="https://console.anthropic.com/" target="_blank" rel="noopener" style="color:#00d4ff;">console.anthropic.com</a>. Se guarda cifrada en la DB del tenant.
+          </div>
+        </div>
+        <div id="aiModelError" class="login-error"></div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn" onclick="closeModal('aiModelModal')">Cancelar</button>
+        <button class="btn primary" id="aiModelSaveBtn" onclick="saveAiModel()">💾 Guardar configuración</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== PROMPT IA MODAL (🤖 IA por tenant) ===== -->
+  <div class="modal-overlay" id="promptModal">
+    <div class="modal">
+      <div class="modal-head">
+        <div>
+          <h3>🤖 IA — <span id="promptTenantName"></span></h3>
+          <div class="sub">Edita el prompt personalizado y el nombre del bot. Variables: <code>{business_name}</code>, <code>{servicios}</code>.</div>
+        </div>
+        <button class="modal-close" onclick="closeModal('promptModal')">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>Nombre del bot <span class="req">*</span></label>
+          <input type="text" id="promptBotName" placeholder="Ej: Sofi" maxlength="40">
+          <div class="hint" style="font-size:0.78rem;color:var(--text-dim);margin-top:5px;">Así se presenta el bot ante los clientes.</div>
+        </div>
+        <div class="form-group">
+          <label>Prompt del sistema (system prompt)</label>
+          <textarea id="promptSystem" rows="12" placeholder="Cargando prompt actual…" style="width:100%;background:var(--bg-2);border:1px solid var(--border-light);color:#fff;padding:12px;border-radius:10px;font-family:monospace;font-size:0.82rem;line-height:1.5;resize:vertical;"></textarea>
+          <div class="hint" style="font-size:0.78rem;color:var(--text-dim);margin-top:5px;">Si lo dejas vacío, se usará la plantilla default de la categoría del negocio.</div>
+        </div>
+        <div id="promptError" class="login-error"></div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn" onclick="closeModal('promptModal')">Cancelar</button>
+        <button class="btn primary" id="promptSaveBtn" onclick="savePrompt()">💾 Guardar IA</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== BOT CONFIG MODAL (unificado: General + IA + Flujos) ===== -->
+  <div class="modal-overlay" id="botConfigModal" style="display:none">
+    <div class="modal" style="max-width:600px">
+      <div class="modal-head">
+        <div>
+          <h3>⚙️ Configurar Bot — <span id="botConfigTenantName"></span></h3>
+          <div class="sub">Configura el modo de atención: IA, Flujos o mixto</div>
+        </div>
+        <button class="modal-close" onclick="closeModal('botConfigModal')">×</button>
+      </div>
+      <div class="modal-body">
+        <!-- Tabs -->
+        <div style="display:flex;gap:4px;margin-bottom:16px;flex-wrap:wrap">
+          <button class="btn primary" id="tabBtnGeneral" onclick="switchBotConfigTab('general')" style="font-size:.8rem">📋 General</button>
+          <button class="btn" id="tabBtnIA" onclick="switchBotConfigTab('ia')" style="font-size:.8rem">🤖 IA</button>
+          <button class="btn" id="tabBtnFlujo" onclick="switchBotConfigTab('flujo')" style="font-size:.8rem">⚡ Flujos</button>
+        </div>
+
+        <!-- TAB: General -->
+        <div id="botConfigTabGeneral">
+          <div class="form-group">
+            <label>Nombre del bot</label>
+            <input type="text" id="cfgBotName" placeholder="Ej: Sofi, OptimusBot" maxlength="40">
+          </div>
+          <div class="form-group">
+            <label>Color primario (hex)</label>
+            <input type="text" id="cfgColorPrimario" placeholder="#22c55e" maxlength="10">
+          </div>
+          <div class="form-group">
+            <label>Moneda</label>
+            <select id="cfgMoneda">
+              <option value="CLP">CLP (Pesos chilenos)</option>
+              <option value="VES">VES (Bolivares)</option>
+              <option value="USD">USD (Dolares)</option>
+              <option value="COP">COP (Pesos colombianos)</option>
+              <option value="PEN">PEN (Soles peruanos)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Metodos de pago (separados por coma)</label>
+            <input type="text" id="cfgMetodosPago" placeholder="efectivo,transferencia,transbank">
+          </div>
+          <div class="form-group">
+            <label>Mensaje de bienvenida</label>
+            <textarea id="cfgWelcome" rows="3" placeholder="Mensaje que reciben los clientes al escribir por primera vez" style="width:100%;background:var(--bg-2);border:1px solid var(--border-light);color:#fff;padding:10px;border-radius:8px;font-size:.85rem;resize:vertical"></textarea>
+          </div>
+          <div class="form-group">
+            <label>Estado del bot</label>
+            <div style="display:flex;gap:8px;align-items:center">
+              <button class="btn" id="cfgBotPauseBtn" onclick="toggleBotFromConfig()">⏸ Pausar</button>
+              <span id="cfgBotStatus" style="font-size:.82rem;color:var(--muted)">Cargando...</span>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>WhatsApp de contacto (opcional)</label>
+            <div style="margin-bottom:8px">
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:.85rem">
+                <input type="checkbox" id="cfgWaEnabled" style="width:auto"> Habilitar boton de WhatsApp en el chat
+              </label>
+            </div>
+            <input type="text" id="cfgWaNumber" placeholder="Numero (con codigo pais, sin +). Ej: 56912345678" style="margin-bottom:8px">
+            <input type="text" id="cfgWaMessage" placeholder="Mensaje predefinido de WhatsApp">
+          </div>
+          <button class="btn primary" onclick="saveGeneralConfig()">💾 Guardar Configuracion General</button>
+        </div>
+
+        <!-- TAB: IA -->
+        <div id="botConfigTabIA" style="display:none">
+          <div class="form-group">
+            <label>Proveedor de IA</label>
+            <select id="cfgAiProvider" onchange="updateAiModelOptions()">
+              <option value="cloudflare">Cloudflare AI (Llama 3.3 70B) — Gratis</option>
+              <option value="anthropic">Anthropic Claude — Premium</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Modelo de IA</label>
+            <input type="text" id="cfgAiModel" placeholder="@cf/meta/llama-3.3-70b-instruct-fp8-fast">
+            <div class="hint" style="font-size:.78rem;color:var(--text-dim);margin-top:4px">Cloudflare: @cf/meta/llama-3.3-70b-instruct-fp8-fast | Anthropic: claude-3-haiku-20240307</div>
+          </div>
+          <div class="form-group">
+            <label>Prompt del sistema (master prompt de la IA)</label>
+            <textarea id="cfgPrompt" rows="14" placeholder="Cargando prompt..." style="width:100%;background:var(--bg-2);border:1px solid var(--border-light);color:#fff;padding:10px;border-radius:8px;font-family:monospace;font-size:.82rem;line-height:1.5;resize:vertical"></textarea>
+            <div class="hint" style="font-size:.78rem;color:var(--text-dim);margin-top:5px;">
+              Variables: <code>{business_name}</code>, <code>{servicios}</code>. Si lo dejas vacio, se usa la plantilla default del rubro.
+            </div>
+          </div>
+          <button class="btn primary" onclick="saveIAConfig()">💾 Guardar Configuracion de IA</button>
+        </div>
+
+        <!-- TAB: Flujos -->
+        <div id="botConfigTabFlujo" style="display:none">
+          <div class="form-group">
+            <label>Modo de atención</label>
+            <div style="display:flex;flex-direction:column;gap:10px">
+              <label style="display:flex;align-items:center;gap:8px;cursor:pointer;background:var(--bg-2);padding:10px;border-radius:8px;border:1px solid var(--border-light)">
+                <input type="radio" name="cfgModoBot" value="ia" id="cfgModoIA" style="width:auto" checked>
+                <div><strong>🤖 Solo IA</strong> — El bot usa inteligencia artificial para conversar<br><span style="font-size:.78rem;color:var(--text-dim)">Más flexible, puede responder cualquier pregunta</span></div>
+              </label>
+              <label style="display:flex;align-items:center;gap:8px;cursor:pointer;background:var(--bg-2);padding:10px;border-radius:8px;border:1px solid var(--border-light)">
+                <input type="radio" name="cfgModoBot" value="flujo" id="cfgModoFlujo" style="width:auto">
+                <div><strong>⚡ Solo Flujo</strong> — Pasos predefinidos sin IA<br><span style="font-size:.78rem;color:var(--text-dim)">Más rápido y preciso, no se confunde</span></div>
+              </label>
+              <label style="display:flex;align-items:center;gap:8px;cursor:pointer;background:var(--bg-2);padding:10px;border-radius:8px;border:1px solid var(--border-light)">
+                <input type="radio" name="cfgModoBot" value="mixto" id="cfgModoMixto" style="width:auto">
+                <div><strong>🔀 Mixto</strong> — Flujo + IA como fallback<br><span style="font-size:.78rem;color:var(--text-dim)">El flujo guía la cita, la IA responde preguntas fuera de tema (precio, horario, etc.)</span></div>
+              </label>
+            </div>
+          </div>
+          <div id="cfgFlujoOptions" style="display:none">
+            <div class="form-group">
+              <label>Plantilla de flujo</label>
+              <select id="cfgFlujoPlantilla"><option value="">Cargando...</option></select>
+            </div>
+            <div class="form-group">
+              <label>Estado del flujo</label>
+              <div style="font-size:.82rem;color:var(--muted)" id="cfgFlujoEstado">Cargando...</div>
+            </div>
+            <button class="btn primary" onclick="saveFlujoConfig()">💾 Guardar Flujo</button>
+            <a href="https://sgc-flujos.pages.dev/admin" target="_blank" class="btn" style="margin-left:8px;font-size:.78rem">🔗 Editor avanzado</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== TOAST ===== -->
+  <div id="toast" class="toast hidden"></div>
+
+  <script>
+    // ============================================================
+    // CONFIG
+    // ============================================================
+    const API_BASE = 'https://sgc-saas.activo.workers.dev';
+    const STORAGE_KEY = 'botwa_superadmin_pwd';
+    let ADMIN_PWD = localStorage.getItem(STORAGE_KEY) || '';
+
+    let tenants = [];
+    let currentCitasSlug = null;
+    let currentCitas = [];
+    let currentCitasFilter = 'todas';
+    let currentQRSlug = null;
+    let currentQRDataUrl = null;
+    let confirmCallback = null;
+    let autoRefreshTimer = null;
+
+    const RUBRO_ICONS = {
+      taller: '🔧',
+      barberia: '💈',
+      clinica_dental: '🦷',
+      salon_belleza: '💅',
+      veterinaria: '🐾',
+      otro: '🏪'
+    };
+
+    // ============================================================
+    // AUTH / LOGIN
+    // ============================================================
+    function showApp() {
+      document.getElementById('loginScreen').classList.add('hidden');
+      document.getElementById('app').classList.remove('hidden');
+      loadTenants();
+      if (autoRefreshTimer) clearInterval(autoRefreshTimer);
+      autoRefreshTimer = setInterval(loadTenants, 60000);
+    }
+    function showLogin() {
+      document.getElementById('loginScreen').classList.remove('hidden');
+      document.getElementById('app').classList.add('hidden');
+      if (autoRefreshTimer) clearInterval(autoRefreshTimer);
+    }
+    function logout() {
+      localStorage.removeItem(STORAGE_KEY);
+      ADMIN_PWD = '';
+      document.getElementById('pwdInput').value = '';
+      showLogin();
+    }
+    document.getElementById('loginForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const pwd = document.getElementById('pwdInput').value;
+      const errBox = document.getElementById('loginError');
+      errBox.classList.remove('show');
+      // Test auth by trying to load tenants
+      try {
+        const res = await fetch(`${API_BASE}/api/superadmin/tenants?pwd=${encodeURIComponent(pwd)}`);
+        if (res.status === 401) {
+          errBox.classList.add('show');
+          return;
+        }
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        ADMIN_PWD = pwd;
+        localStorage.setItem(STORAGE_KEY, pwd);
+        showApp();
+      } catch (err) {
+        errBox.textContent = '❌ Error de conexión: ' + err.message;
+        errBox.classList.add('show');
+      }
+    });
+
+    // Auto-login if pwd in localStorage
+    if (ADMIN_PWD) {
+      // Verify it still works
+      fetch(`${API_BASE}/api/superadmin/tenants?pwd=${encodeURIComponent(ADMIN_PWD)}`)
+        .then(r => { if (r.ok) showApp(); else showLogin(); })
+        .catch(() => showLogin());
+    } else {
+      showLogin();
+    }
+
+    // ============================================================
+    // API HELPERS
+    // ============================================================
+    async function apiGet(path) {
+      const res = await fetch(`${API_BASE}${path}`, {
+        headers: { 'X-Admin-Password': ADMIN_PWD }
+      });
+      return res.json();
+    }
+    async function apiPost(path, body) {
+      const res = await fetch(`${API_BASE}${path}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Admin-Password': ADMIN_PWD },
+        body: JSON.stringify(body || {})
+      });
+      return res.json();
+    }
+    async function apiDelete(path) {
+      const res = await fetch(`${API_BASE}${path}`, {
+        method: 'DELETE',
+        headers: { 'X-Admin-Password': ADMIN_PWD }
+      });
+      return res.json();
+    }
+    async function apiPut(path, body) {
+      const res = await fetch(`${API_BASE}${path}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'X-Admin-Password': ADMIN_PWD },
+        body: JSON.stringify(body || {})
+      });
+      return res.json();
+    }
+
+    // ============================================================
+    // MEJORA 14: PLANTILLAS DE PROMPT POR CATEGORÍA
+    // ============================================================
+    const AUNCLICK_CATEGORIAS = [
+      { tipo: "Agropecuarios", categorias: ["Insumos Agropecuarios", "Agricolas", "Maquinaria Agricola"] },
+      { tipo: "Automotriz", categorias: ["Auto Talleres", "Auto Repuestos", "Auto Lavado", "Concesionarios", "Motos"] },
+      { tipo: "Belleza y Cuidado Personal", categorias: ["Ropas", "Zapaterias", "Joyerias"] },
+      { tipo: "Comida y Bebidas", categorias: ["Restaurantes", "Bares y Discotecas", "Cafeterias", "Panaderias", "Supermercados", "Fruver", "Heladerias"] },
+      { tipo: "Educacion", categorias: ["Academias", "Colegios", "Librerias", "Universidades"] },
+      { tipo: "Hogar y Construccion", categorias: ["Ferreterias", "Mueblerias", "Electrodomesticos", "Pinturas", "Cerrajerias", "Electricos"] },
+      { tipo: "Salud y Bienestar", categorias: ["Farmacias", "Clinicas y Hospitales", "Laboratorios", "Opticas", "Veterinarias", "Gimnasios", "Dentistas", "Naturistas"] },
+      { tipo: "Servicios Profesionales", categorias: ["Inmobiliarias", "Bufete de Abogados", "Juridicos", "Publicidad", "Fotografia", "Imprenta", "Tecnologia", "Seguridad"] },
+      { tipo: "Servicios Varios", categorias: ["General", "Pizzerias", "Perfumerias", "Barberias", "Salon y Spa", "Transportes", "Variedades", "Domicilios", "Sublimacion", "Lavanderias", "Desechables", "Bicicletas", "Cámaras de Seguridad", "COLCHONES", "Carniceria", "Charcuteria", "Cocinas y Accesorios", "Confiteria", "Decoración", "Energeticos", "Lubricantes", "Maquinaria", "Medicina Servicio Medico", "Otro", "Peluqueria", "Potabilizadora de Agua", "Ropa Infantil", "Suplementos"] },
+      { tipo: "Tiendas y Comercio", categorias: ["Celulares", "Entretenimiento y recreación"] },
+      { tipo: "Turismo y Hospedaje", categorias: ["Hoteles y Posadas", "Agencias de Viaje", "Artesanias", "Encomiendas"] }
+    ];
+    let templatesModalInitialized = false;
+    let currentTemplateData = null;
+
+    async function openTemplatesModal() {
+      openModal('templatesModal');
+      // Reset state
+      document.getElementById('tplEstado').textContent = '—';
+      document.getElementById('tplPrompt').value = '';
+      document.getElementById('tplPrompt').placeholder = 'Selecciona una categoría para cargar o generar el prompt…';
+      document.getElementById('tplSaveBtn').disabled = true;
+      document.getElementById('tplApplyBtn').disabled = true;
+      document.getElementById('tplDeleteBtn').disabled = true;
+      document.getElementById('tplError').classList.remove('show');
+      currentTemplateData = null;
+      // Llenar dropdown solo la primera vez
+      if (!templatesModalInitialized) {
+        const select = document.getElementById('tplCategoria');
+        let html = '<option value="">— Selecciona una categoría —</option>';
+        for (const grupo of AUNCLICK_CATEGORIAS) {
+          html += `<optgroup label="${escapeAttr(grupo.tipo)}">`;
+          for (const cat of grupo.categorias) {
+            html += `<option value="${escapeAttr(cat)}">${escapeHtml(cat)}</option>`;
+          }
+          html += '</optgroup>';
+        }
+        select.innerHTML = html;
+        templatesModalInitialized = true;
+      }
+      // Pre-seleccionar primera categoría automáticamente
+      document.getElementById('tplCategoria').selectedIndex = 0;
+    }
+
+    async function onTemplateCategoriaChange() {
+      const cat = document.getElementById('tplCategoria').value;
+      const promptEl = document.getElementById('tplPrompt');
+      const estadoEl = document.getElementById('tplEstado');
+      const saveBtn = document.getElementById('tplSaveBtn');
+      const applyBtn = document.getElementById('tplApplyBtn');
+      const delBtn = document.getElementById('tplDeleteBtn');
+      const errBox = document.getElementById('tplError');
+      errBox.classList.remove('show');
+      if (!cat) {
+        promptEl.value = '';
+        estadoEl.textContent = '—';
+        saveBtn.disabled = true;
+        applyBtn.disabled = true;
+        delBtn.disabled = true;
+        currentTemplateData = null;
+        return;
+      }
+      estadoEl.textContent = 'Cargando…';
+      promptEl.value = '';
+      saveBtn.disabled = true;
+      applyBtn.disabled = true;
+      delBtn.disabled = true;
+      try {
+        const data = await apiGet(`/api/superadmin/templates/${encodeURIComponent(cat)}`);
+        if (!data.success) {
+          errBox.textContent = '❌ ' + (data.error || 'Error al cargar plantilla');
+          errBox.classList.add('show');
+          estadoEl.textContent = 'Error';
+          return;
+        }
+        currentTemplateData = data;
+        promptEl.value = data.prompt || '';
+        const isDefault = data.is_default;
+        const tenantsConRubro = data.tenants_con_rubro ?? 0;
+        estadoEl.innerHTML = `${isDefault ? '<span style="color:var(--warn)">⚠ Plantilla default autogenerada</span>' : '<span style="color:var(--primary)">✓ Plantilla personalizada guardada</span>'}<br><span style="color:var(--text-dim);font-size:0.78rem;">${tenantsConRubro} negocio(s) con este rubro</span>`;
+        saveBtn.disabled = false;
+        applyBtn.disabled = false;
+        delBtn.disabled = isDefault;
+      } catch (err) {
+        errBox.textContent = '❌ Error: ' + err.message;
+        errBox.classList.add('show');
+        estadoEl.textContent = 'Error';
+      }
+    }
+
+    async function saveTemplate() {
+      const cat = document.getElementById('tplCategoria').value;
+      const prompt = document.getElementById('tplPrompt').value.trim();
+      const errBox = document.getElementById('tplError');
+      const btn = document.getElementById('tplSaveBtn');
+      errBox.classList.remove('show');
+      if (!cat) return;
+      if (!prompt) {
+        errBox.textContent = '❌ El prompt no puede estar vacío';
+        errBox.classList.add('show');
+        return;
+      }
+      btn.disabled = true; btn.textContent = 'Guardando…';
+      try {
+        const data = await apiPut(`/api/superadmin/templates/${encodeURIComponent(cat)}`, { prompt });
+        if (data.success) {
+          showToast('success', `✅ Plantilla guardada para "${cat}"`);
+          // Refrescar estado
+          await onTemplateCategoriaChange();
+        } else {
+          errBox.textContent = '❌ ' + (data.error || 'Error al guardar');
+          errBox.classList.add('show');
+        }
+      } catch (err) {
+        errBox.textContent = '❌ Error: ' + err.message;
+        errBox.classList.add('show');
+      } finally {
+        btn.disabled = false; btn.textContent = '💾 Guardar plantilla';
+      }
+    }
+
+    async function deleteTemplate() {
+      const cat = document.getElementById('tplCategoria').value;
+      if (!cat) return;
+      if (!confirm(`¿Eliminar la plantilla de "${cat}"?\n\nSe volverá a usar el prompt default autogenerado.`)) return;
+      const errBox = document.getElementById('tplError');
+      const btn = document.getElementById('tplDeleteBtn');
+      btn.disabled = true; btn.textContent = 'Eliminando…';
+      try {
+        const data = await apiDelete(`/api/superadmin/templates/${encodeURIComponent(cat)}`);
+        if (data.success) {
+          showToast('success', `🗑 Plantilla eliminada para "${cat}"`);
+          await onTemplateCategoriaChange();
+        } else {
+          errBox.textContent = '❌ ' + (data.error || 'Error al eliminar');
+          errBox.classList.add('show');
+        }
+      } catch (err) {
+        errBox.textContent = '❌ Error: ' + err.message;
+        errBox.classList.add('show');
+      } finally {
+        btn.disabled = false; btn.textContent = '🗑 Eliminar';
+      }
+    }
+
+    async function applyTemplateToTenants() {
+      const cat = document.getElementById('tplCategoria').value;
+      if (!cat) return;
+      const tenantsCount = currentTemplateData?.tenants_con_rubro ?? 0;
+      if (tenantsCount === 0) {
+        if (!confirm(`No hay negocios con el rubro "${cat}".\n\n¿Quieres guardar la plantilla de todos modos para uso futuro?`)) return;
+        // Solo guardar si no está guardada ya
+        await saveTemplate();
+        return;
+      }
+      if (!confirm(`¿Aplicar la plantilla de "${cat}" a los ${tenantsCount} negocio(s) con este rubro?\n\nEsto sobreescribirá el prompt personalizado de cada negocio. Los negocios que ya tengan un prompt custom lo perderán.`)) return;
+      const errBox = document.getElementById('tplError');
+      const btn = document.getElementById('tplApplyBtn');
+      btn.disabled = true; btn.textContent = 'Aplicando…';
+      try {
+        // Asegurar que la plantilla esté guardada primero
+        await saveTemplate();
+        const data = await apiPost(`/api/superadmin/templates/${encodeURIComponent(cat)}/apply`, {});
+        if (data.success) {
+          showToast('success', `✅ Aplicada a ${data.tenants_actualizados}/${data.tenants_encontrados} negocio(s)`);
+          if (data.detalles && data.detalles.some(d => !d.ok)) {
+            const failed = data.detalles.filter(d => !d.ok);
+            errBox.innerHTML = `⚠️ ${failed.length} negocio(s) no se pudieron actualizar:<br>${failed.map(d => '• ' + escapeHtml(d.slug) + ': ' + escapeHtml(d.error || '')).join('<br>')}`;
+            errBox.classList.add('show');
+          }
+        } else {
+          errBox.textContent = '❌ ' + (data.error || 'Error al aplicar');
+          errBox.classList.add('show');
+        }
+      } catch (err) {
+        errBox.textContent = '❌ Error: ' + err.message;
+        errBox.classList.add('show');
+      } finally {
+        btn.disabled = false; btn.textContent = '⚡ Aplicar a todos los negocios de esta categoría';
+      }
+    }
+
+    // ============================================================
+    // TAREA 3a: CAMBIO DE CATEGORÍA POR TENANT
+    // ============================================================
+    let categoriaModalInitialized = false;
+    let currentCategoriaSlug = null;
+
+    function openCategoriaModal(slug) {
+      const tenant = tenants.find(t => t.slug === slug);
+      if (!tenant) { showToast('error', 'Tenant no encontrado'); return; }
+      currentCategoriaSlug = slug;
+      document.getElementById('categoriaTenantName').textContent = tenant.business_name || slug;
+      document.getElementById('categoriaActual').textContent = tenant.rubro || '—';
+      document.getElementById('categoriaError').classList.remove('show');
+      const select = document.getElementById('categoriaSelect');
+      // Llenar dropdown solo la primera vez
+      if (!categoriaModalInitialized) {
+        let html = '<option value="">— Selecciona una categoría —</option>';
+        for (const grupo of AUNCLICK_CATEGORIAS) {
+          html += `<optgroup label="${escapeAttr(grupo.tipo)}">`;
+          for (const cat of grupo.categorias) {
+            html += `<option value="${escapeAttr(cat)}">${escapeHtml(cat)}</option>`;
+          }
+          html += '</optgroup>';
+        }
+        select.innerHTML = html;
+        categoriaModalInitialized = true;
+      }
+      // Pre-seleccionar la categoría actual si existe en la lista
+      select.value = '';
+      for (const opt of select.options) {
+        if (opt.value === (tenant.rubro || '')) { select.value = opt.value; break; }
+      }
+      openModal('categoriaModal');
+    }
+
+    async function saveCategoria() {
+      const errBox = document.getElementById('categoriaError');
+      const btn = document.getElementById('categoriaSaveBtn');
+      errBox.classList.remove('show');
+      if (!currentCategoriaSlug) return;
+      const nuevaCat = document.getElementById('categoriaSelect').value;
+      if (!nuevaCat) {
+        errBox.textContent = '❌ Selecciona una categoría';
+        errBox.classList.add('show');
+        return;
+      }
+      btn.disabled = true; btn.textContent = 'Guardando…';
+      try {
+        const data = await apiPut(`/api/superadmin/tenants/${encodeURIComponent(currentCategoriaSlug)}/categoria`, { categoria: nuevaCat });
+        if (data.success) {
+          showToast('success', `✅ ${data.message || 'Categoría actualizada'}`);
+          closeModal('categoriaModal');
+          await loadTenants();
+        } else {
+          errBox.textContent = '❌ ' + (data.error || 'Error al cambiar categoría');
+          errBox.classList.add('show');
+        }
+      } catch (err) {
+        errBox.textContent = '❌ Error: ' + err.message;
+        errBox.classList.add('show');
+      } finally {
+        btn.disabled = false; btn.textContent = '💾 Cambiar categoría';
+      }
+    }
+
+    // ============================================================
+    // ⚡ MODELO IA: SELECTOR DE PROVEEDOR POR TENANT
+    // ============================================================
+    let currentAiModelSlug = null;
+
+    function openAiModelModal(slug, currentProvider, currentModel) {
+      currentAiModelSlug = slug;
+      document.getElementById('aiModelTenantSlug').textContent = slug;
+      document.getElementById('aiProviderSelect').value = currentProvider || 'cloudflare';
+      document.getElementById('aiModelInput').value = currentModel || '';
+      document.getElementById('apiKeyInput').value = '';
+      document.getElementById('aiModelError').classList.remove('show');
+      toggleApiKeyVisibility();
+      openModal('aiModelModal');
+    }
+
+    function toggleApiKeyVisibility() {
+      const provider = document.getElementById('aiProviderSelect').value;
+      const apiKeyGroup = document.getElementById('apiKeyGroup');
+      const aiModelGroup = document.getElementById('aiModelGroup');
+      if (provider === 'anthropic') {
+        apiKeyGroup.style.display = '';
+        aiModelGroup.style.display = '';
+      } else {
+        apiKeyGroup.style.display = 'none';
+        aiModelGroup.style.display = 'none';
+      }
+    }
+
+    async function saveAiModel() {
+      const errBox = document.getElementById('aiModelError');
+      const btn = document.getElementById('aiModelSaveBtn');
+      errBox.classList.remove('show');
+      if (!currentAiModelSlug) return;
+      const provider = document.getElementById('aiProviderSelect').value;
+      const model = document.getElementById('aiModelInput').value.trim();
+      const apiKey = document.getElementById('apiKeyInput').value.trim();
+      if (provider === 'anthropic' && !apiKey) {
+        errBox.textContent = '❌ Anthropic requiere API key';
+        errBox.classList.add('show');
+        return;
+      }
+      btn.disabled = true; btn.textContent = 'Guardando…';
+      try {
+        const body = { ai_provider: provider, ai_model: model || null };
+        if (provider === 'anthropic' && apiKey) body.anthropic_api_key = apiKey;
+        const data = await apiPut(`/api/superadmin/tenants/${encodeURIComponent(currentAiModelSlug)}/ai-model`, body);
+        if (data.success) {
+          showToast('success', `✅ ${data.message || 'Modelo IA actualizado'}`);
+          closeModal('aiModelModal');
+          await loadTenants();
+        } else {
+          errBox.textContent = '❌ ' + (data.error || 'Error al actualizar modelo IA');
+          errBox.classList.add('show');
+        }
+      } catch (err) {
+        errBox.textContent = '❌ Error: ' + err.message;
+        errBox.classList.add('show');
+      } finally {
+        btn.disabled = false; btn.textContent = '💾 Guardar configuración';
+      }
+    }
+
+    // ============================================================
+    // 🤖 IA: EDITOR DE PROMPT POR TENANT
+    // ============================================================
+    let currentPromptSlug = null;
+
+    async function openPromptModal(slug) {
+      const tenant = tenants.find(t => t.slug === slug);
+      if (!tenant) { showToast('error', 'Tenant no encontrado'); return; }
+      currentPromptSlug = slug;
+      document.getElementById('promptTenantName').textContent = tenant.business_name || slug;
+      document.getElementById('promptError').classList.remove('show');
+      document.getElementById('promptSystem').value = '';
+      document.getElementById('promptSystem').placeholder = 'Cargando prompt actual…';
+      document.getElementById('promptBotName').value = 'Sofi';
+      document.getElementById('promptSaveBtn').disabled = true;
+      document.getElementById('promptSaveBtn').textContent = 'Cargando…';
+      openModal('promptModal');
+      try {
+        const data = await apiGet(`/api/superadmin/tenants/${encodeURIComponent(slug)}/prompt`);
+        if (!data.success) {
+          document.getElementById('promptError').textContent = '❌ ' + (data.error || 'Error al cargar prompt');
+          document.getElementById('promptError').classList.add('show');
+          return;
+        }
+        document.getElementById('promptSystem').value = data.custom_prompt || '';
+        document.getElementById('promptSystem').placeholder = 'Vacío = se usa la plantilla default de la categoría ("' + (data.rubro || 'otro') + '")';
+        document.getElementById('promptBotName').value = data.bot_name || 'Sofi';
+      } catch (err) {
+        document.getElementById('promptError').textContent = '❌ Error: ' + err.message;
+        document.getElementById('promptError').classList.add('show');
+      } finally {
+        document.getElementById('promptSaveBtn').disabled = false;
+        document.getElementById('promptSaveBtn').textContent = '💾 Guardar IA';
+      }
+    }
+
+    async function savePrompt() {
+      const errBox = document.getElementById('promptError');
+      const btn = document.getElementById('promptSaveBtn');
+      errBox.classList.remove('show');
+      if (!currentPromptSlug) return;
+      const botName = document.getElementById('promptBotName').value.trim() || 'Sofi';
+      const customPrompt = document.getElementById('promptSystem').value;
+      btn.disabled = true; btn.textContent = 'Guardando…';
+      try {
+        const data = await apiPut(`/api/superadmin/tenants/${encodeURIComponent(currentPromptSlug)}/prompt`, {
+          custom_prompt: customPrompt,
+          bot_name: botName
+        });
+        if (data.success) {
+          showToast('success', `✅ IA actualizada para ${currentPromptSlug}`);
+          closeModal('promptModal');
+        } else {
+          errBox.textContent = '❌ ' + (data.error || 'Error al guardar');
+          errBox.classList.add('show');
+        }
+      } catch (err) {
+        errBox.textContent = '❌ Error: ' + err.message;
+        errBox.classList.add('show');
+      } finally {
+        btn.disabled = false; btn.textContent = '💾 Guardar IA';
+      }
+    }
+
+    // ============================================================
+    // LOAD + RENDER TENANTS
+    // ============================================================
+    async function loadTenants() {
+      try {
+        const data = await apiGet('/api/superadmin/tenants');
+        if (!data.success) {
+          if (data.error === 'No autorizado') { logout(); return; }
+          showToast('error', 'Error: ' + (data.error || 'desconocido'));
+          return;
+        }
+        tenants = data.tenants || [];
+        renderStats();
+        renderTenants();
+      } catch (err) {
+        showToast('error', 'Error de conexión: ' + err.message);
+      }
+    }
+
+    function renderStats() {
+      const total = tenants.length;
+      const active = tenants.filter(t => t.status === 'active' || t.status === 'approved').length;
+      const pending = tenants.filter(t => t.status === 'pending' || t.status === 'pending_approval').length;
+      const citas = tenants.reduce((a, t) => a + (t.kpis?.citas_total || 0), 0);
+      const conv = tenants.reduce((a, t) => a + (t.kpis?.conversaciones || 0), 0);
+      document.getElementById('stat-total').textContent = total;
+      document.getElementById('stat-active').textContent = active;
+      document.getElementById('stat-pending').textContent = pending;
+      document.getElementById('stat-citas').textContent = citas;
+      document.getElementById('stat-conv').textContent = conv;
+      document.getElementById('tenantsCount').textContent = total + (total === 1 ? ' negocio' : ' negocios');
+    }
+
+    function renderTenants() {
+      const grid = document.getElementById('tenantsGrid');
+      if (!tenants.length) {
+        grid.innerHTML = '<div class="center-msg"><div class="big">📭</div>No hay negocios registrados.</div>';
+        return;
+      }
+      grid.innerHTML = tenants.map((t, i) => {
+        const icon = RUBRO_ICONS[t.rubro] || '🏪';
+        const status = t.status || 'pending';
+        const statusLabel = {
+          active: 'Activo',
+          approved: 'Aprobado',
+          pending: 'Pendiente',
+          pending_approval: 'Pendiente',
+          rejected: 'Rechazado',
+          suspended: 'Suspendido'
+        }[status] || status;
+        const isPending = (status === 'pending' || status === 'pending_approval');
+        const created = t.created_at ? new Date(t.created_at.replace(' ', 'T') + 'Z').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+        const waDisplay = t.whatsapp_number ? formatPhone(t.whatsapp_number) : '—';
+        const evoInstance = t.evolution_instance ? `<span title="${escapeHtml(t.evolution_instance)}">${escapeHtml(t.evolution_instance)}</span>` : '<span class="muted">no creada</span>';
+        const botPaused = t.bot_paused === true;
+        const toggleOn = !botPaused;
+
+        return `
+          <div class="tenant-card ${status} ${botPaused ? 'bot-paused' : ''}" style="animation-delay:${i * 0.03}s" data-slug="${escapeAttr(t.slug)}">
+            <div class="tenant-head">
+              <div class="left">
+                <div class="rubro-icon">${icon}</div>
+                <div class="info">
+                  <h3>${escapeHtml(t.business_name)}</h3>
+                  <div class="meta">slug: <code>${escapeHtml(t.slug)}</code></div>
+                  <span class="cat-badge" title="Click para cambiar la categoría" onclick="event.stopPropagation();openCategoriaModal('${escapeAttr(t.slug)}')">${escapeHtml(t.rubro || 'otro')} <span class="cat-edit">✎</span></span>
+                </div>
+              </div>
+              <div class="right-col">
+                <div class="bot-toggle-wrap" id="toggle-${escapeAttr(t.slug)}" onclick="toggleBot('${escapeAttr(t.slug)}', ${botPaused ? 'true' : 'false'})" title="${botPaused ? 'Reactivar bot' : 'Pausar bot'}">
+                  <span class="toggle-label ${toggleOn ? 'on' : 'off'}">${toggleOn ? 'ON' : 'OFF'}</span>
+                  <div class="toggle ${toggleOn ? 'on' : ''}"><div class="knob"></div></div>
+                </div>
+                <span class="status-badge ${status}">${statusLabel}</span>
+              </div>
+            </div>
+            <div class="tenant-meta-grid">
+              <div class="meta-cell">
+                <div class="label">WhatsApp</div>
+                <div class="value small">${escapeHtml(waDisplay)}</div>
+              </div>
+              <div class="meta-cell">
+                <div class="label">Citas</div>
+                <div class="value">${t.kpis?.citas_total ?? 0}</div>
+              </div>
+              <div class="meta-cell">
+                <div class="label">Pendientes</div>
+                <div class="value ${t.kpis?.citas_pendientes ? 'warn' : ''}">${t.kpis?.citas_pendientes ?? 0}</div>
+              </div>
+              <div class="meta-cell">
+                <div class="label">Servicios</div>
+                <div class="value">${t.kpis?.servicios ?? 0}</div>
+              </div>
+              <div class="meta-cell">
+                <div class="label">Conversaciones</div>
+                <div class="value">${t.kpis?.conversaciones ?? 0}</div>
+              </div>
+              <div class="meta-cell">
+                <div class="label">Creado</div>
+                <div class="value small muted">${created}</div>
+              </div>
+            </div>
+            <div class="meta-cell" style="margin-bottom:12px;">
+              <div class="label">Instancia Evolution</div>
+              <div class="value small ${t.evolution_instance ? 'success' : 'muted'}">${evoInstance}</div>
+            </div>
+            <div class="actions-row">
+              <a class="btn" href="https://sgc-saas.pages.dev/chat?t=${escapeAttr(t.slug)}" target="_blank" rel="noopener" title="Abrir chat del bot">💬 Chat</a>
+              <a class="btn" href="https://sgc-saas.pages.dev/admin?t=${escapeAttr(t.slug)}" target="_blank" rel="noopener" title="Abrir panel admin">🔧 Admin</a>
+              <a class="btn" href="https://sgc-saas.pages.dev/status?slug=${escapeAttr(t.slug)}" target="_blank" rel="noopener" title="Ver estado de la instancia">📊 Estado</a>
+              <button class="btn" onclick="showQR('${escapeAttr(t.slug)}')" ${!t.evolution_instance ? 'disabled title="Sin instancia Evolution"' : ''} title="Ver código QR">📱 QR</button>
+              <button class="btn" onclick="showCitas('${escapeAttr(t.slug)}')" title="Ver citas">📅 Citas</button>
+              <button class="btn primary" onclick="showCreateCita('${escapeAttr(t.slug)}')" title="Crear cita">➕ Crear</button>
+              <button class="btn info" onclick="openBotConfigModal('${escapeAttr(t.slug)}', '${escapeAttr(t.ai_provider || "cloudflare")}', '${escapeAttr(t.ai_model || "")}', ${t.id})" title="Configurar Bot: IA, Flujos, General">⚙️ Config Bot</button>
+              ${isPending ? `
+                <button class="btn warn" onclick="approveTenant('${escapeAttr(t.slug)}')">✅ Aprobar</button>
+                <button class="btn danger" onclick="rejectTenant('${escapeAttr(t.slug)}')">❌ Rechazar</button>
+              ` : ''}
+              <button class="btn danger" onclick="deleteTenant('${escapeAttr(t.slug)}', '${escapeAttr(t.business_name)}')">🗑 Eliminar</button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // ============================================================
+    // ACTIONS
+    // ============================================================
+    function showConfirm(title, bodyHtml, btnLabel, onConfirm) {
+      document.getElementById('confirmTitle').textContent = title;
+      document.getElementById('confirmBody').innerHTML = bodyHtml;
+      const btn = document.getElementById('confirmActionBtn');
+      btn.textContent = btnLabel;
+      btn.className = 'btn danger';
+      confirmCallback = onConfirm;
+      btn.onclick = () => {
+        closeModal('confirmModal');
+        if (confirmCallback) confirmCallback();
+        confirmCallback = null;
+      };
+      openModal('confirmModal');
+    }
+
+    async function approveTenant(slug) {
+      showConfirm(
+        'Aprobar negocio',
+        `¿Aprobar <strong>${escapeHtml(slug)}</strong>?<br><br>Esto creará la instancia en Evolution API, cargará servicios default según el rubro y marcará el tenant como aprobado.`,
+        '✅ Aprobar',
+        async () => {
+          showToast('info', `Aprobando ${slug}… (puede tardar ~15s)`);
+          const data = await apiPost(`/api/superadmin/tenants/${encodeURIComponent(slug)}/approve`, {});
+          if (data.success) {
+            showToast('success', `✅ ${slug} aprobado. Instancia: ${data.instance}`);
+            await loadTenants();
+            if (data.qr) {
+              setTimeout(() => showQR(slug), 400);
+            }
+          } else {
+            showToast('error', 'Error: ' + (data.error || 'desconocido'));
+          }
+        }
+      );
+    }
+
+    async function rejectTenant(slug) {
+      showConfirm(
+        'Rechazar negocio',
+        `¿Rechazar <strong>${escapeHtml(slug)}</strong>?<br>El negocio pasará a estado "rechazado" y no podrá usar el bot.`,
+        '❌ Rechazar',
+        async () => {
+          const data = await apiPost(`/api/superadmin/tenants/${encodeURIComponent(slug)}/reject`, {});
+          if (data.success) {
+            showToast('success', `🚫 ${slug} rechazado`);
+            loadTenants();
+          } else {
+            showToast('error', 'Error: ' + (data.error || 'desconocido'));
+          }
+        }
+      );
+    }
+
+    function deleteTenant(slug, name) {
+      showConfirm(
+        'Eliminar negocio',
+        `⚠️ <strong>Esta acción es irreversible.</strong><br><br>Se eliminará permanentemente:<br>• El tenant <strong>${escapeHtml(name)}</strong> (${escapeHtml(slug)})<br>• Todas sus citas<br>• Todos sus servicios<br>• Todas sus conversaciones de WhatsApp<br>• Su instancia en Evolution API<br><br>Escribe <code>${escapeHtml(slug)}</code> para confirmar:<br>
+        <input type="text" id="deleteConfirmInput" style="width:100%;margin-top:8px;background:var(--bg-2);border:1px solid var(--border-light);color:#fff;padding:10px;border-radius:10px;font-family:monospace;" oninput="document.getElementById('confirmActionBtn').disabled = this.value !== '${escapeAttr(slug)}'">`,
+        '🗑 Eliminar',
+        async () => {
+          const data = await apiDelete(`/api/superadmin/tenants/${encodeURIComponent(slug)}`);
+          if (data.success) {
+            showToast('success', `🗑 ${slug} eliminado`);
+            loadTenants();
+          } else {
+            showToast('error', 'Error: ' + (data.error || 'desconocido'));
+          }
+        }
+      );
+      // Disable initially
+      setTimeout(() => {
+        const btn = document.getElementById('confirmActionBtn');
+        if (btn) btn.disabled = true;
+      }, 50);
+    }
+
+    // ============================================================
+    // MEJORA ON/OFF: Toggle pause/resume bot per tenant
+    // ============================================================
+    async function toggleBot(slug, currentlyPaused) {
+      const wrap = document.getElementById(`toggle-${slug}`);
+      if (!wrap) return;
+      wrap.classList.add('loading');
+      const action = currentlyPaused ? 'resume' : 'pause';
+      const verb = currentlyPaused ? 'Reactivando' : 'Pausando';
+      showToast('info', `${verb} bot de ${slug}…`);
+      try {
+        const data = await apiPost(`/api/superadmin/tenants/${encodeURIComponent(slug)}/${action}`, {});
+        if (data.success) {
+          // Update local state
+          const t = tenants.find(x => x.slug === slug);
+          if (t) t.bot_paused = data.bot_paused;
+          // Update visual toggle without full reload
+          const card = document.querySelector(`.tenant-card[data-slug="${CSS.escape(slug)}"]`);
+          const isOn = !data.bot_paused;
+          if (wrap) {
+            const label = wrap.querySelector('.toggle-label');
+            const toggle = wrap.querySelector('.toggle');
+            if (label) {
+              label.textContent = isOn ? 'ON' : 'OFF';
+              label.className = `toggle-label ${isOn ? 'on' : 'off'}`;
+            }
+            if (toggle) toggle.className = `toggle ${isOn ? 'on' : ''}`;
+            wrap.setAttribute('onclick', `toggleBot('${slug.replace(/'/g, "\\'")}', ${data.bot_paused ? 'true' : 'false'})`);
+            wrap.setAttribute('title', data.bot_paused ? 'Reactivar bot' : 'Pausar bot');
+          }
+          if (card) card.classList.toggle('bot-paused', data.bot_paused);
+          showToast('success', data.message || (data.bot_paused ? `⏸️ Bot pausado para ${slug}` : `✅ Bot reactivado para ${slug}`));
+        } else {
+          showToast('error', 'Error: ' + (data.error || 'desconocido'));
+        }
+      } catch (err) {
+        showToast('error', 'Error de conexión: ' + err.message);
+      } finally {
+        if (wrap) wrap.classList.remove('loading');
+      }
+    }
+
+    // ============================================================
+    // QR MODAL
+    // ============================================================
+    async function showQR(slug) {
+      currentQRSlug = slug;
+      currentQRDataUrl = null;
+      const tenant = tenants.find(t => t.slug === slug);
+      document.getElementById('qrTenantName').textContent = tenant ? tenant.business_name : slug;
+      document.getElementById('qrInstanceLabel').textContent = tenant?.evolution_instance ? `Instancia: ${tenant.evolution_instance}` : '';
+      document.getElementById('qrDownloadBtn').disabled = true;
+      document.getElementById('qrModalBody').innerHTML = `
+        <div class="qr-wrap">
+          <div class="qr-img-box placeholder"><span class="spinner-inline"></span></div>
+          <div class="loading-shimmer">Obteniendo QR…</div>
+        </div>`;
+      openModal('qrModal');
+      await fetchQR();
+       }
+    async function fetchQR() {
+      try {
+        const data = await apiGet(`/api/superadmin/tenants/${encodeURIComponent(currentQRSlug)}/qr`);
+        if (data.success && data.qr) {
+          currentQRDataUrl = data.qr;
+          document.getElementById('qrModalBody').innerHTML = `
+            <div class="qr-wrap">
+              <div class="qr-img-box"><img src="${data.qr}" alt="QR ${escapeAttr(currentQRSlug)}"></div>
+              <div class="qr-instance-info">Instancia: ${escapeHtml(data.instance || '')}</div>
+              <div class="qr-instructions">
+                <strong>📋 Instrucciones:</strong>
+                <ol>
+                  <li>Abre WhatsApp en tu celular</li>
+                  <li>Ve a <strong>Configuración → Dispositivos vinculados → Vincular dispositivo</strong></li>
+                  <li>Apunta la cámara al QR</li>
+                  <li>Espera a que se conecte (puede tardar unos segundos)</li>
+                </ol>
+              </div>
+            </div>`;
+          document.getElementById('qrDownloadBtn').disabled = false;
+        } else {
+          document.getElementById('qrModalBody').innerHTML = `
+            <div class="qr-wrap">
+              <div class="qr-img-box placeholder" style="font-size:2rem;">📵</div>
+              <div style="color:var(--text-muted);">
+                <strong>QR no disponible</strong><br>
+                <span style="font-size:0.85rem;">${escapeHtml(data.error || 'La instancia ya está conectada o no existe QR.')}</span>
+              </div>
+            </div>`;
+          document.getElementById('qrDownloadBtn').disabled = true;
+        }
+      } catch (err) {
+        document.getElementById('qrModalBody').innerHTML = `<div class="center-msg"><div class="big">⚠️</div>Error: ${escapeHtml(err.message)}</div>`;
+      }
+    }
+    function refreshQR() {
+      if (!currentQRSlug) return;
+      document.getElementById('qrModalBody').innerHTML = `
+        <div class="qr-wrap">
+          <div class="qr-img-box placeholder"><span class="spinner-inline"></span></div>
+          <div class="loading-shimmer">Refrescando QR…</div>
+        </div>`;
+      document.getElementById('qrDownloadBtn').disabled = true;
+      fetchQR();
+    }
+    function downloadQR() {
+      if (!currentQRDataUrl) return;
+      const a = document.createElement('a');
+      a.href = currentQRDataUrl;
+      a.download = `qr-${currentQRSlug}.png`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    }
+
+    // ============================================================
+    // CITAS MODAL
+    // ============================================================
+    async function showCitas(slug) {
+      currentCitasSlug = slug;
+      currentCitasFilter = 'todas';
+      // Reset filter buttons
+      document.querySelectorAll('#citasModal .filter-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.filter === 'todas');
+      });
+      const tenant = tenants.find(t => t.slug === slug);
+      document.getElementById('citasTenantName').textContent = tenant ? tenant.business_name : slug;
+      openModal('citasModal');
+      document.getElementById('citasTableWrap').innerHTML = `<div class="center-msg"><span class="spinner-inline"></span></div>`;
+      await fetchCitas();
+    }
+    async function fetchCitas() {
+      try {
+        const data = await apiGet(`/api/superadmin/tenants/${encodeURIComponent(currentCitasSlug)}/citas`);
+        if (!data.success) {
+          document.getElementById('citasTableWrap').innerHTML = `<div class="center-msg"><div class="big">⚠️</div>${escapeHtml(data.error || 'Error')}</div>`;
+          return;
+        }
+        currentCitas = data.citas || [];
+        document.getElementById('citasCount').textContent = `${currentCitas.length} cita(s) registrada(s)`;
+        renderCitasTable();
+      } catch (err) {
+        document.getElementById('citasTableWrap').innerHTML = `<div class="center-msg"><div class="big">⚠️</div>${escapeHtml(err.message)}</div>`;
+      }
+    }
+    function setCitasFilter(filter) {
+      currentCitasFilter = filter;
+      document.querySelectorAll('#citasModal .filter-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.filter === filter);
+      });
+      renderCitasTable();
+    }
+    function renderCitasTable() {
+      const wrap = document.getElementById('citasTableWrap');
+      let list = currentCitas;
+      if (currentCitasFilter !== 'todas') {
+        list = currentCitas.filter(c => c.estado_aprobacion === currentCitasFilter || c.estado === currentCitasFilter);
+      }
+      if (!list.length) {
+        wrap.innerHTML = `<div class="center-msg"><div class="big">📭</div>No hay citas que mostrar.</div>`;
+        return;
+      }
+      wrap.innerHTML = `
+        <table class="citas-table">
+          <thead>
+            <tr>
+              <th>Fecha</th>
+              <th>Hora</th>
+              <th>Servicio</th>
+              <th>Cliente</th>
+              <th>Teléfono</th>
+              <th>Patente</th>
+              <th>Estado</th>
+              <th>Canal</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${list.map(c => `
+              <tr>
+                <td>${escapeHtml(c.fecha_cita || '—')}</td>
+                <td>${escapeHtml(c.hora_cita || '—')}</td>
+                <td>${escapeHtml(c.servicio || '—')}</td>
+                <td>${escapeHtml(c.nombre_cliente || '—')}</td>
+                <td>${escapeHtml(c.telefono || '—')}</td>
+                <td>${escapeHtml(c.patente || '—')}</td>
+                <td><span class="mini-badge ${c.estado_aprobacion || c.estado || ''}">${escapeHtml(c.estado_aprobacion || c.estado || '—')}</span></td>
+                <td>${escapeHtml(c.canal || '—')}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>`;
+    }
+
+    // ============================================================
+    // CREATE CITA
+    // ============================================================
+    async function showCreateCita(slug) {
+      const tenant = tenants.find(t => t.slug === slug);
+      document.getElementById('createCitaTenantName').textContent = tenant ? tenant.business_name : slug;
+      document.getElementById('createCitaSlug').value = slug;
+      document.getElementById('createCitaForm').reset();
+      document.getElementById('createCitaError').classList.remove('show');
+      // Default: tomorrow
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      document.getElementById('citaFecha').value = tomorrow.toISOString().slice(0, 10);
+      document.getElementById('citaHora').value = '10:00';
+      // Load servicios
+      const select = document.getElementById('citaServicio');
+      select.innerHTML = '<option value="">Cargando servicios…</option>';
+      try {
+        const res = await fetch(`${API_BASE}/api/tenant/servicios?t=${encodeURIComponent(slug)}`);
+        const data = await res.json();
+        const servicios = data.servicios || [];
+        if (!servicios.length) {
+          select.innerHTML = '<option value="">Sin servicios (escribe manualmente)</option>';
+          // Allow free-form by making it a text input
+          const newInput = document.createElement('input');
+          newInput.type = 'text';
+          newInput.id = 'citaServicio';
+          newInput.required = true;
+          newInput.placeholder = 'Nombre del servicio';
+          select.replaceWith(newInput);
+        } else {
+          select.innerHTML = '<option value="">— Selecciona —</option>' +
+            servicios.map(s => `<option value="${escapeAttr(s.nombre)}">${escapeHtml(s.nombre)} — $${(s.precio || 0).toLocaleString('es-CL')}</option>`).join('');
+        }
+      } catch (err) {
+        select.innerHTML = '<option value="">Error cargando servicios</option>';
+      }
+      openModal('createCitaModal');
+    }
+    async function submitCreateCita(e) {
+      e.preventDefault();
+      const slug = document.getElementById('createCitaSlug').value;
+      const fecha = document.getElementById('citaFecha').value;
+      const hora = document.getElementById('citaHora').value;
+      const servEl = document.getElementById('citaServicio');
+      const servicio = servEl.value;
+      const nombre = document.getElementById('citaNombre').value.trim();
+      const telefono = document.getElementById('citaTelefono').value.trim();
+      const patente = document.getElementById('citaPatente').value.trim();
+      const errBox = document.getElementById('createCitaError');
+      errBox.classList.remove('show');
+      if (!fecha || !hora || !servicio || !nombre || !telefono) {
+        errBox.textContent = '❌ Faltan campos requeridos';
+        errBox.classList.add('show');
+        return;
+      }
+      try {
+        const data = await apiPost(`/api/superadmin/tenants/${encodeURIComponent(slug)}/citas`, {
+          fecha, hora, servicio, nombre, telefono, patente: patente || null
+        });
+        if (data.success) {
+          showToast('success', `✅ Cita #${data.cita_id} creada para ${slug}`);
+          closeModal('createCitaModal');
+          // If citas modal open for same slug, refresh
+          if (currentCitasSlug === slug && document.getElementById('citasModal').classList.contains('show')) {
+            fetchCitas();
+          }
+          loadTenants();
+        } else {
+          errBox.textContent = '❌ ' + (data.error || 'Error desconocido');
+          errBox.classList.add('show');
+        }
+      } catch (err) {
+        errBox.textContent = '❌ Error: ' + err.message;
+        errBox.classList.add('show');
+      }
+    }
+
+    // ============================================================
+    // MODAL HELPERS
+    // ============================================================
+    function openModal(id) {
+      document.getElementById(id).classList.add('show');
+      document.body.style.overflow = 'hidden';
+    }
+    function closeModal(id) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.classList.remove('show');
+      el.style.display = 'none';
+      document.body.style.overflow = '';
+    }
+    // Close on overlay click
+    document.querySelectorAll('.modal-overlay').forEach(overlay => {
+      overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) {
+          overlay.classList.remove('show');
+          overlay.style.display = 'none';
+          document.body.style.overflow = '';
+        }
+      });
+    });
+    // Close on Escape
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        document.querySelectorAll('.modal-overlay').forEach(overlay => {
+          if (overlay.style.display === 'flex' || overlay.classList.contains('show')) {
+            overlay.classList.remove('show');
+            overlay.style.display = 'none';
+            document.body.style.overflow = '';
+          }
+        });
+      }
+    });
+
+    // ============================================================
+    // TOAST
+    // ============================================================
+    let toastTimer = null;
+    function showToast(type, msg) {
+      const toast = document.getElementById('toast');
+      const icon = type === 'success' ? '✅' : type === 'error' ? '❌' : 'ℹ️';
+      toast.className = `toast ${type}`;
+      toast.innerHTML = `<span class="icon">${icon}</span><span>${escapeHtml(msg)}</span>`;
+      toast.classList.remove('hidden');
+      if (toastTimer) clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => toast.classList.add('hidden'), 4500);
+    }
+
+    // ============================================================
+    // UTILS
+    // ============================================================
+    function escapeHtml(str) {
+      if (str === null || str === undefined) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+    function escapeAttr(str) {
+      if (str === null || str === undefined) return '';
+      return String(str).replace(/'/g, "\\'").replace(/"/g, '&quot;');
+    }
+    function formatPhone(phone) {
+      if (!phone) return '';
+      const clean = String(phone).replace(/[^0-9+]/g, '');
+      return clean;
+    }
+
+    // ============================================================
+    // BOT CONFIG MODAL (unificado: General + IA + Flujos)
+    // ============================================================
+    let botConfigSlug = null;
+    let botConfigTenantId = null;
+    let botConfigAiProvider = 'cloudflare';
+    let botConfigAiModel = '';
+    let flujoPlantillas = [];
+
+    function openBotConfigModal(slug, aiProvider, aiModel, tenantId) {
+      botConfigSlug = slug;
+      botConfigTenantId = tenantId;
+      botConfigAiProvider = aiProvider || 'cloudflare';
+      botConfigAiModel = aiModel || '';
+      document.getElementById('botConfigTenantName').textContent = slug;
+      document.getElementById('botConfigModal').classList.add('show');
+      document.getElementById('botConfigModal').style.display = 'flex';
+      document.body.style.overflow = 'hidden';
+      switchBotConfigTab('general');
+      loadBotConfigGeneral();
+      loadBotConfigIA();
+      loadBotConfigFlujo();
+    }
+
+    function switchBotConfigTab(tab) {
+      var tabMap = {'general':'General','ia':'IA','flujo':'Flujo'};
+      var tabKey = tabMap[tab] || tab.charAt(0).toUpperCase() + tab.slice(1);
+      ['General','IA','Flujo'].forEach(function(t) {
+        var el = document.getElementById('botConfigTab'+t);
+        var btn = document.getElementById('tabBtn'+t);
+        if (el) el.style.display = 'none';
+        if (btn) btn.classList.remove('primary');
+      });
+      var showEl = document.getElementById('botConfigTab'+tabKey);
+      var showBtn = document.getElementById('tabBtn'+tabKey);
+      if (showEl) showEl.style.display = 'block';
+      if (showBtn) showBtn.classList.add('primary');
+    }
+
+    // === TAB: General ===
+    async function loadBotConfigGeneral() {
+      try {
+        const tenant = tenants.find(t => t.slug === botConfigSlug);
+        if (tenant) {
+          const status = tenant.bot_paused ? 'Pausado' : 'Activo';
+          document.getElementById('cfgBotStatus').textContent = status;
+          document.getElementById('cfgBotPauseBtn').textContent = tenant.bot_paused ? '▶️ Reanudar' : '⏸ Pausar';
+        }
+        const cfgRes = await fetch(`${API_BASE}/api/superadmin/tenants/${botConfigSlug}/prompt`, {headers: {'X-Admin-Password': ADMIN_PWD}});
+        const cfgData = await cfgRes.json();
+        document.getElementById('cfgBotName').value = cfgData.bot_name || '';
+        document.getElementById('cfgWelcome').value = cfgData.welcome_message || '';
+        document.getElementById('cfgColorPrimario').value = cfgData.color_primario || '#22c55e';
+        document.getElementById('cfgMoneda').value = cfgData.moneda || 'CLP';
+        document.getElementById('cfgMetodosPago').value = cfgData.metodos_pago || '';
+        document.getElementById('cfgWaEnabled').checked = cfgData.whatsapp_enabled === true;
+        document.getElementById('cfgWaNumber').value = cfgData.whatsapp_number || '';
+        document.getElementById('cfgWaMessage').value = cfgData.whatsapp_message || '';
+      } catch(e) {
+        console.error('Error loading general config:', e);
+      }
+    }
+
+    async function toggleBotFromConfig() {
+      try {
+        const res = await fetch(`${API_BASE}/api/tenant/toggle-pause?t=${botConfigSlug}`, {method:'POST', headers:{'X-Admin-Password':ADMIN_PWD}});
+        const data = await res.json();
+        toast(data.message || 'OK', 'success');
+        document.getElementById('cfgBotStatus').textContent = data.bot_paused ? 'Pausado' : 'Activo';
+        document.getElementById('cfgBotPauseBtn').textContent = data.bot_paused ? '▶️ Reanudar' : '⏸ Pausar';
+      } catch(e) { toast('Error: ' + e.message, 'error'); }
+    }
+
+    async function saveGeneralConfig() {
+      const body = {
+        bot_name: document.getElementById('cfgBotName').value.trim(),
+        welcome_message: document.getElementById('cfgWelcome').value.trim(),
+        color_primario: document.getElementById('cfgColorPrimario').value.trim(),
+        moneda: document.getElementById('cfgMoneda').value,
+        metodos_pago: document.getElementById('cfgMetodosPago').value.trim(),
+        whatsapp_enabled: document.getElementById('cfgWaEnabled').checked,
+        whatsapp_number: document.getElementById('cfgWaNumber').value.trim(),
+        whatsapp_message: document.getElementById('cfgWaMessage').value.trim()
+      };
+      try {
+        await fetch(`${API_BASE}/api/superadmin/tenants/${botConfigSlug}/prompt`, {
+          method: 'PUT',
+          headers: {'Content-Type':'application/json','X-Admin-Password':ADMIN_PWD},
+          body: JSON.stringify(body)
+        });
+        toast('Configuracion general guardada', 'success');
+      } catch(e) { toast('Error: ' + e.message, 'error'); }
+    }
+
+    // === TAB: IA ===
+    async function loadBotConfigIA() {
+      document.getElementById('cfgAiProvider').value = botConfigAiProvider;
+      document.getElementById('cfgAiModel').value = botConfigAiModel;
+      try {
+        const res = await fetch(`${API_BASE}/api/superadmin/tenants/${botConfigSlug}/prompt`, {headers: {'X-Admin-Password': ADMIN_PWD}});
+        const data = await res.json();
+        document.getElementById('cfgPrompt').value = data.prompt || '';
+        if (data.ai_provider) { document.getElementById('cfgAiProvider').value = data.ai_provider; }
+        if (data.ai_model) { document.getElementById('cfgAiModel').value = data.ai_model; }
+      } catch(e) { console.error('Error loading IA config:', e); }
+    }
+
+    function updateAiModelOptions() {
+      const provider = document.getElementById('cfgAiProvider').value;
+      if (provider === 'cloudflare') {
+        document.getElementById('cfgAiModel').placeholder = '@cf/meta/llama-3.3-70b-instruct-fp8-fast';
+      } else {
+        document.getElementById('cfgAiModel').placeholder = 'claude-3-haiku-20240307';
+      }
+    }
+
+    async function saveIAConfig() {
+      const prompt = document.getElementById('cfgPrompt').value;
+      const provider = document.getElementById('cfgAiProvider').value;
+      const model = document.getElementById('cfgAiModel').value;
+      try {
+        await fetch(`${API_BASE}/api/superadmin/tenants/${botConfigSlug}/prompt`, {
+          method: 'PUT',
+          headers: {'Content-Type':'application/json','X-Admin-Password':ADMIN_PWD},
+          body: JSON.stringify({custom_prompt: prompt})
+        });
+        await fetch(`${API_BASE}/api/superadmin/tenants/${botConfigSlug}/ai-model`, {
+          method: 'PUT',
+          headers: {'Content-Type':'application/json','X-Admin-Password':ADMIN_PWD},
+          body: JSON.stringify({ai_provider: provider, ai_model: model})
+        });
+        toast('Configuracion de IA guardada', 'success');
+      } catch(e) { toast('Error: ' + e.message, 'error'); }
+    }
+
+    // === TAB: Flujos ===
+    async function loadBotConfigFlujo() {
+      try {
+        // Cargar plantillas
+        const tplRes = await fetch('https://sgc-flujos.pages.dev/api/plantillas');
+        const tplData = await tplRes.json();
+        flujoPlantillas = tplData.plantillas || [];
+        const sel = document.getElementById('cfgFlujoPlantilla');
+        sel.innerHTML = flujoPlantillas.map(p => '<option value="'+p.id+'">'+p.nombre+' ('+p.rubro+')</option>').join('');
+
+        // Cargar config actual del flujo
+        const cfgRes = await fetch('https://sgc-flujos.pages.dev/api/config?t=' + botConfigTenantId);
+        const cfgData = await cfgRes.json();
+        const cfg = cfgData.config || {};
+        const activo = cfg.activo === 1;
+        var modo = cfg.modo || 'flujo';
+
+        // Seleccionar el radio correcto
+        if (!activo) {
+          document.getElementById('cfgModoIA').checked = true;
+        } else if (modo === 'mixto') {
+          document.getElementById('cfgModoMixto').checked = true;
+        } else {
+          document.getElementById('cfgModoFlujo').checked = true;
+        }
+
+        var estadoText = !activo ? '❌ Inactivo (usa solo IA)' : (modo === 'mixto' ? '🔀 Modo mixto activo' : '⚡ Flujo activo');
+        document.getElementById('cfgFlujoEstado').textContent = estadoText;
+        document.getElementById('cfgFlujoOptions').style.display = (activo) ? 'block' : 'none';
+        if (cfg.flujo_id) sel.value = cfg.flujo_id;
+      } catch(e) {
+        console.error('Error loading flujo config:', e);
+        document.getElementById('cfgFlujoEstado').textContent = 'Error cargando flujos';
+      }
+
+      // Listener para mostrar/ocultar opciones de flujo
+      document.querySelectorAll('input[name="cfgModoBot"]').forEach(function(radio) {
+        radio.onchange = function() {
+          var modoSel = document.querySelector('input[name="cfgModoBot"]:checked').value;
+          var showOpts = (modoSel === 'flujo' || modoSel === 'mixto');
+          document.getElementById('cfgFlujoOptions').style.display = showOpts ? 'block' : 'none';
+          if (modoSel === 'ia') {
+            document.getElementById('cfgFlujoEstado').textContent = '❌ Inactivo (usa solo IA)';
+          } else if (modoSel === 'mixto') {
+            document.getElementById('cfgFlujoEstado').textContent = '🔀 Modo mixto: flujo + IA';
+          } else {
+            document.getElementById('cfgFlujoEstado').textContent = '⚡ Flujo activo';
+          }
+        };
+      });
+    }
+
+    async function saveFlujoConfig() {
+      var modoSel = document.querySelector('input[name="cfgModoBot"]:checked').value;
+      var plantillaId = document.getElementById('cfgFlujoPlantilla').value;
+      var isActivo = (modoSel === 'flujo' || modoSel === 'mixto');
+      try {
+        await fetch('https://sgc-flujos.pages.dev/api/config', {
+          method: 'PUT',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({
+            tenant_id: botConfigTenantId,
+            flujo_id: plantillaId ? parseInt(plantillaId) : null,
+            activo: isActivo,
+            modo: modoSel
+          })
+        });
+        var msg = '';
+        if (modoSel === 'ia') msg = 'Modo IA activado. El bot usara solo inteligencia artificial.';
+        else if (modoSel === 'mixto') msg = 'Modo mixto activado. Flujo + IA como fallback.';
+        else msg = 'Flujo activado. El bot usara el flujo determinista.';
+        toast(msg, 'success');
+        document.getElementById('cfgFlujoEstado').textContent = modoSel === 'ia' ? '❌ Inactivo' : (modoSel === 'mixto' ? '🔀 Mixto activo' : '⚡ Flujo activo');
+      } catch(e) { toast('Error: ' + e.message, 'error'); }
+    }
+  </script>
+</body>
+</html>

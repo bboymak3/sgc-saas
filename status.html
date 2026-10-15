@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex,nofollow">
+<title>Estado de Solicitud — BotWA</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%2322c55e' d='M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z'/%3E%3C/svg%3E">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--green:#22c55e;--bg:#0a0a0a;--bg1:#111;--bg2:#1a1a1a;--bg3:#222;--border:#2a2a2a;--text:#e8e8e8;--muted:#999;--dim:#666;--warn:#fbbf24;--danger:#ef4444;--blue:#3b82f6}
+body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+a{color:var(--green);text-decoration:none}
+.card{background:var(--bg1);border:1px solid var(--border);border-radius:16px;padding:40px;max-width:480px;width:100%;text-align:center}
+.card h1{font-size:1.4rem;font-weight:800;margin-bottom:8px}
+.card .icon{font-size:3rem;margin-bottom:16px}
+.card .icon.ok{color:var(--green)}
+.card .icon.wait{color:var(--warn)}
+.card .icon.err{color:var(--danger)}
+.card .status-badge{display:inline-block;padding:6px 14px;border-radius:12px;font-size:.78rem;font-weight:600;margin:8px 0 16px;text-transform:uppercase;letter-spacing:.5px}
+.badge-active{background:rgba(34,197,94,.15);color:#6ee7b7}
+.badge-pending{background:rgba(251,191,36,.15);color:#fcd34d}
+.badge-rejected{background:rgba(239,68,68,.15);color:#fca5a5}
+.badge-approved{background:rgba(59,130,246,.15);color:#93c5fd}
+.card .biz-name{font-size:1.1rem;font-weight:700;color:#fff;margin-bottom:4px}
+.card p{color:var(--muted);font-size:.88rem;line-height:1.5;margin-bottom:16px}
+.card .links{margin-top:20px;display:flex;flex-direction:column;gap:8px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:10px 18px;border-radius:10px;font-weight:600;font-size:.9rem;cursor:pointer;border:none;font-family:inherit;text-decoration:none;transition:all .15s}
+.btn-green{background:var(--green);color:#042713}.btn-green:hover{background:#fff}
+.btn-outline{background:transparent;border:1px solid var(--border);color:var(--text)}.btn-outline:hover{border-color:var(--green);color:var(--green)}
+.spinner{display:inline-block;width:24px;height:24px;border:3px solid rgba(34,197,94,.2);border-top-color:var(--green);border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.search-box{display:flex;gap:8px;margin-bottom:20px}
+.search-box input{flex:1;padding:10px 14px;background:var(--bg2);border:1px solid var(--border);border-radius:10px;color:var(--text);font-size:.9rem;outline:none}
+.search-box input:focus{border-color:var(--green)}
+</style>
+</head>
+<body>
+
+<div class="card" id="statusCard">
+  <div id="content">
+    <div class="spinner"></div>
+    <p style="margin-top:12px">Consultando estado...</p>
+  </div>
+</div>
+
+<script>
+const API = '';
+
+function getSlug(){
+  const p = new URLSearchParams(location.search);
+  return p.get('slug') || p.get('t') || '';
+}
+
+function esc(s){ return String(s||'').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function init(){
+  const slug = getSlug();
+  const content = document.getElementById('content');
+
+  if(!slug){
+    content.innerHTML = `
+      <h1>Consultar estado</h1>
+      <p>Ingresa el identificador de tu negocio para ver el estado de tu solicitud.</p>
+      <div class="search-box">
+        <input type="text" id="slugInput" placeholder="mi-negocio" onkeypress="if(event.key==='Enter')searchStatus()">
+        <button class="btn btn-green" onclick="searchStatus()"><i class="fas fa-search"></i></button>
+      </div>
+      <a href="/" class="btn btn-outline">Volver al inicio</a>
+    `;
+    return;
+  }
+
+  fetch(`${API}/api/onboarding/status?slug=${encodeURIComponent(slug)}`)
+    .then(r=>r.json())
+    .then(d=>{
+      renderStatus(slug, d);
+    })
+    .catch(e=>{
+      content.innerHTML = `
+        <div class="icon err"><i class="fas fa-network-wired"></i></div>
+        <h1>Error de conexion</h1>
+        <p>No se pudo conectar con el servidor. Intenta mas tarde.</p>
+        <a href="/" class="btn btn-outline">Volver al inicio</a>
+      `;
+    });
+}
+
+function renderStatus(slug, d){
+  const content = document.getElementById('content');
+  if(!d.success && d.error){
+    content.innerHTML = `
+      <div class="icon err"><i class="fas fa-exclamation-triangle"></i></div>
+      <h1>No encontrado</h1>
+      <p>${esc(d.error)}</p>
+      <p>Identificador: <code>${esc(slug)}</code></p>
+      <a href="/" class="btn btn-outline">Volver al inicio</a>
+    `;
+    return;
+  }
+
+  const status = d.status || d.tenant?.status || 'unknown';
+  const bizName = d.business_name || d.tenant?.business_name || slug;
+  const iconClass = status==='active'?'ok':status==='pending_approval'?'wait':status==='rejected'?'err':'wait';
+  const iconHtml = status==='active'?'<i class="fas fa-check-circle"></i>':status==='pending_approval'?'<i class="fas fa-clock"></i>':status==='rejected'?'<i class="fas fa-times-circle"></i>':'<i class="fas fa-info-circle"></i>';
+  const badgeClass = status==='active'?'badge-active':status==='pending_approval'?'badge-pending':status==='rejected'?'badge-rejected':'badge-approved';
+  const statusLabel = status==='active'?'Activo':status==='pending_approval'?'Pendiente de aprobacion':status==='rejected'?'Rechazado':status==='approved'?'Aprobado':'En revision';
+
+  let extra = '';
+  if(status === 'active'){
+    extra = `
+      <p>Tu bot esta activo y funcionando. Ya puedes recibir citas automaticamente.</p>
+      <div class="links">
+        <a href="/chat?t=${encodeURIComponent(slug)}" class="btn btn-green"><i class="fas fa-comment"></i> Abrir Chat</a>
+        <a href="/admin?t=${encodeURIComponent(slug)}" class="btn btn-outline"><i class="fas fa-cog"></i> Panel Admin</a>
+      </div>
+    `;
+  } else if(status === 'pending_approval' || status === 'approved'){
+    extra = `<p>Tu solicitud fue recibida y esta siendo revisada. Te avisaremos por WhatsApp cuando sea aprobada (generalmente en minutos).</p>`;
+  } else if(status === 'rejected'){
+    extra = `<p>Tu solicitud fue rechazada. Contactanos para mas informacion.</p>`;
+  } else {
+    extra = `<p>Estado: ${esc(status)}</p>`;
+  }
+
+  content.innerHTML = `
+    <div class="icon ${iconClass}">${iconHtml}</div>
+    <div class="biz-name">${esc(bizName)}</div>
+    <span class="status-badge ${badgeClass}">${statusLabel}</span>
+    ${extra}
+    <div style="margin-top:20px">
+      <a href="/" class="btn btn-outline"><i class="fas fa-home"></i> Volver al inicio</a>
+    </div>
+  `;
+}
+
+function searchStatus(){
+  const slug = document.getElementById('slugInput').value.trim();
+  if(slug){
+    location.search = `?slug=${encodeURIComponent(slug)}`;
+  }
+}
+
+init();
+</script>
+</body>
+</html>

@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex,nofollow">
+<title>Admin — BotWA</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%2322c55e' d='M19 5h-2V3H7v2H5c-1.1 0-2 .9-2 2v1c0 2.55 1.92 4.63 4.39 4.94.63 1.5 1.98 2.63 3.61 2.96V19H7v2h10v-2h-4v-3.1c1.63-.33 2.98-1.46 3.61-2.96C19.08 12.63 21 10.55 21 8V7c0-1.1-.9-2-2-2zM5 8V7h2v3.82C5.84 10.41 5 9.31 5 8zm14 0c0 1.31-.84 2.41-2 2.82V7h2v1z'/%3E%3C/svg%3E">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--green:#22c55e;--green-d:#16a34a;--bg:#0a0a0a;--bg1:#111;--bg2:#1a1a1a;--bg3:#222;--border:#2a2a2a;--text:#e8e8e8;--muted:#999;--dim:#666;--radius:12px;--danger:#ef4444;--warn:#fbbf24;--blue:#3b82f6}
+body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);line-height:1.5}
+a{color:var(--green);text-decoration:none}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:8px;font-weight:600;font-size:.85rem;cursor:pointer;border:none;font-family:inherit;transition:all .15s;text-decoration:none}
+.btn:hover{text-decoration:none;transform:translateY(-1px)}
+.btn-green{background:var(--green);color:#042713}.btn-green:hover{background:#fff}
+.btn-outline{background:transparent;border:1px solid var(--border);color:var(--text)}.btn-outline:hover{border-color:var(--green);color:var(--green)}
+.btn-danger{background:var(--danger);color:#fff}
+.btn-warn{background:var(--warn);color:#271903}
+.btn-blue{background:var(--blue);color:#fff}
+.btn-sm{padding:5px 10px;font-size:.78rem}
+.card{background:var(--bg1);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:16px}
+.card-title{font-size:1rem;font-weight:700;margin-bottom:16px;display:flex;align-items:center;gap:8px}
+input,select,textarea{width:100%;padding:9px 12px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:.9rem;font-family:inherit;outline:none}
+input:focus,select:focus,textarea:focus{border-color:var(--green)}
+label{display:block;font-size:.82rem;font-weight:600;margin-bottom:4px;color:var(--muted)}
+table{width:100%;border-collapse:collapse;font-size:.85rem}
+th{text-align:left;padding:10px 12px;background:var(--bg2);color:var(--muted);font-weight:600;border-bottom:2px solid var(--border)}
+td{padding:10px 12px;border-bottom:1px solid var(--border)}
+tr:hover td{background:var(--bg2)}
+.badge{display:inline-block;padding:3px 8px;border-radius:12px;font-size:.7rem;font-weight:600}
+.badge-green{background:rgba(34,197,94,.15);color:#6ee7b7}
+.badge-yellow{background:rgba(251,191,36,.15);color:#fcd34d}
+.badge-red{background:rgba(239,68,68,.15);color:#fca5a5}
+.badge-blue{background:rgba(59,130,246,.15);color:#93c5fd}
+.hidden{display:none!important}
+.spinner{display:inline-block;width:16px;height:16px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.nav{position:sticky;top:0;z-index:100;background:rgba(10,10,10,.92);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);padding:12px 20px;display:flex;align-items:center;justify-content:space-between}
+.nav-brand{font-weight:800;font-size:1.05rem;color:#fff;display:flex;align-items:center;gap:8px}
+.nav-brand .accent{color:var(--green)}
+.main{max-width:1200px;margin:0 auto;padding:24px 20px}
+.tabs{display:flex;gap:4px;margin-bottom:20px;flex-wrap:wrap}
+.tab{padding:8px 16px;border-radius:8px;font-size:.85rem;font-weight:600;cursor:pointer;background:var(--bg1);border:1px solid var(--border);color:var(--muted);transition:all .15s}
+.tab.active{background:var(--green);color:#042713;border-color:var(--green)}
+.tab:hover:not(.active){color:var(--text)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:640px){.grid2{grid-template-columns:1fr}}
+.stat{text-align:center;padding:16px;background:var(--bg2);border-radius:8px}
+.stat-val{font-size:1.8rem;font-weight:800;color:var(--green)}
+.stat-label{font-size:.72rem;color:var(--muted);text-transform:uppercase;margin-top:2px}
+.url-box{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:10px;margin-top:6px;display:flex;align-items:center;gap:8px}
+.url-box code{color:var(--green);font-size:.8rem;flex:1;word-break:break-all}
+.copy-btn{background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:4px 10px;border-radius:6px;cursor:pointer;font-size:.74rem;white-space:nowrap}
+.copy-btn:hover{border-color:var(--green);color:var(--green)}
+.toast{position:fixed;top:20px;left:50%;transform:translateX(-50%);background:var(--bg3);color:#fff;padding:12px 24px;border-radius:8px;z-index:999;opacity:0;transition:opacity .3s}
+.toast.show{opacity:1}.toast.success{background:var(--green);color:#042713}.toast.error{background:var(--danger)}
+.empty{text-align:center;padding:30px;color:var(--dim)}
+.kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:20px}
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-brand"><i class="fas fa-cog"></i> <span id="bizName">BotWA</span> <span class="accent">Admin</span></div>
+  <div style="display:flex;gap:8px;align-items:center">
+    <a class="btn btn-outline btn-sm" href="/superadmin"><i class="fas fa-shield-halved"></i> SuperAdmin</a>
+    <a class="btn btn-green btn-sm" id="chatLink" href="#" target="_blank"><i class="fas fa-comment"></i> Abrir Chat</a>
+  </div>
+</nav>
+
+<div class="main">
+  <div id="errorMsg" class="card hidden" style="border-color:var(--danger);color:#fca5a5"></div>
+
+  <div id="content">
+    <div class="empty"><div class="spinner"></div><p style="margin-top:12px">Cargando panel...</p></div>
+  </div>
+
+  <div class="tabs hidden" id="tabs">
+    <div class="tab active" onclick="switchTab(event,'dash')"><i class="fas fa-chart-line"></i> Dashboard</div>
+    <div class="tab" onclick="switchTab(event,'citas')"><i class="fas fa-calendar"></i> Citas</div>
+    <div class="tab" onclick="switchTab(event,'servicios')"><i class="fas fa-tools"></i> Servicios</div>
+    <div class="tab" onclick="switchTab(event,'bot')"><i class="fas fa-robot"></i> Bot IA</div>
+    <div class="tab" onclick="switchTab(event,'enlaces')"><i class="fas fa-link"></i> Enlaces</div>
+  </div>
+
+  <!-- TAB: DASHBOARD -->
+  <div id="tab-dash" class="hidden">
+    <div class="kpi-row" id="kpiRow"></div>
+    <div class="card">
+      <div class="card-title"><i class="fas fa-info-circle"></i> Informacion del Negocio</div>
+      <div id="bizInfo" style="font-size:.88rem;line-height:1.8"></div>
+    </div>
+  </div>
+
+  <!-- TAB: CITAS -->
+  <div id="tab-citas" class="hidden">
+    <div class="card">
+      <div class="card-title"><i class="fas fa-calendar"></i> Citas recientes <button class="btn btn-outline btn-sm" style="margin-left:auto" onclick="loadCitas()"><i class="fas fa-sync"></i></button></div>
+      <div style="overflow-x:auto"><table>
+        <thead><tr><th>Fecha</th><th>Hora</th><th>Cliente</th><th>Telefono</th><th>Servicio</th><th>Tipo</th><th>Estado</th></tr></thead>
+        <tbody id="citasBody"><tr><td colspan="7" class="empty">Cargando...</td></tr></tbody>
+      </table></div>
+    </div>
+  </div>
+
+  <!-- TAB: SERVICIOS -->
+  <div id="tab-servicios" class="hidden">
+    <div class="card">
+      <div class="card-title"><i class="fas fa-tools"></i> Servicios <button class="btn btn-green btn-sm" style="margin-left:auto" onclick="showServForm()"><i class="fas fa-plus"></i> Nuevo</button></div>
+      <div style="overflow-x:auto"><table>
+        <thead><tr><th>Nombre</th><th>Categoria</th><th>Precio</th><th>Duracion</th><th>Activo</th><th>Acciones</th></tr></thead>
+        <tbody id="servBody"><tr><td colspan="6" class="empty">Cargando...</td></tr></tbody>
+      </table></div>
+    </div>
+  </div>
+
+  <!-- TAB: BOT IA -->
+  <div id="tab-bot" class="hidden">
+    <div class="card">
+      <div class="card-title"><i class="fas fa-robot"></i> Configuracion del Bot IA</div>
+      <div id="botConfig">
+        <label>Estado del Bot</label>
+        <div style="margin-bottom:12px"><button class="btn btn-green btn-sm" id="botToggleBtn" onclick="toggleBot()"><i class="fas fa-pause"></i> Pausar Bot</button></div>
+        <label>Proveedor de IA</label>
+        <select id="aiProvider" style="margin-bottom:12px">
+          <option value="cloudflare">Cloudflare AI (Llama 3.1) - Gratis</option>
+          <option value="anthropic">Anthropic Claude (Premium)</option>
+        </select>
+        <label>Modelo IA (opcional)</label>
+        <input id="aiModel" placeholder="Ej: llama-3.1-70b-instruct" style="margin-bottom:12px">
+        <button class="btn btn-green btn-sm" onclick="saveAIConfig()"><i class="fas fa-save"></i> Guardar Configuracion IA</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB: ENLACES -->
+  <div id="tab-enlaces" class="hidden">
+    <div class="card">
+      <div class="card-title"><i class="fas fa-link"></i> Enlaces del Negocio</div>
+      <label>Chat publico (compartir con clientes)</label>
+      <div class="url-box"><code id="urlChat">-</code><button class="copy-btn" onclick="copyUrl('urlChat')"><i class="fas fa-copy"></i> Copiar</button></div>
+      <label style="margin-top:12px">Este panel admin</label>
+      <div class="url-box"><code id="urlAdmin">-</code><button class="copy-btn" onclick="copyUrl('urlAdmin')"><i class="fas fa-copy"></i> Copiar</button></div>
+      <label style="margin-top:12px">Estado de solicitud</label>
+      <div class="url-box"><code id="urlStatus">-</code><button class="copy-btn" onclick="copyUrl('urlStatus')"><i class="fas fa-copy"></i> Copiar</button></div>
+    </div>
+  </div>
+</div>
+
+<div id="modalContainer"></div>
+<div id="toast" class="toast"></div>
+
+<script>
+const API = '';
+let SLUG = '';
+
+function getSlug(){
+  const p = new URLSearchParams(location.search);
+  return p.get('t') || p.get('tenant') || '';
+}
+
+function toast(msg, type){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show ' + (type||'');
+  setTimeout(()=>t.className='toast', 3000);
+}
+
+function esc(s){ return String(s||'').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+function switchTab(e, tab){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  e.target.classList.add('active');
+  ['dash','citas','servicios','bot','enlaces'].forEach(t=>{
+    document.getElementById('tab-'+t).classList.add('hidden');
+  });
+  document.getElementById('tab-'+tab).classList.remove('hidden');
+  if(tab==='citas') loadCitas();
+  if(tab==='servicios') loadServicios();
+  if(tab==='bot') loadBotConfig();
+}
+
+function api(path, opts){
+  return fetch(`${API}${path}`, opts).then(r=>r.json());
+}
+
+function init(){
+  SLUG = getSlug();
+  if(!SLUG){
+    document.getElementById('content').innerHTML = '<div class="card" style="text-align:center"><i class="fas fa-exclamation-triangle" style="font-size:2rem;color:var(--warn)"></i><h3 style="margin-top:12px">Falta el identificador del negocio</h3><p style="color:var(--muted);margin-top:8px">Usa la URL con el parametro <code>?t=SLUG</code></p><p style="margin-top:12px"><a href="/superadmin">Ir a SuperAdmin</a></p></div>';
+    return;
+  }
+  // Set URLs
+  document.getElementById('chatLink').href = `/chat?t=${SLUG}`;
+  document.getElementById('urlChat').textContent = `${location.origin}/chat?t=${SLUG}`;
+  document.getElementById('urlAdmin').textContent = `${location.origin}/admin?t=${SLUG}`;
+  document.getElementById('urlStatus').textContent = `${location.origin}/status?slug=${SLUG}`;
+
+  // Load dashboard
+  api(`/api/tenant/dashboard?t=${SLUG}`).then(d=>{
+    if(d.success){
+      document.getElementById('content').classList.add('hidden');
+      document.getElementById('tabs').classList.remove('hidden');
+      document.getElementById('tab-dash').classList.remove('hidden');
+      document.getElementById('bizName').textContent = d.tenant.business_name || 'BotWA';
+      // KPIs
+      document.getElementById('kpiRow').innerHTML = `
+        <div class="stat"><div class="stat-val">${d.kpis.citas_total||0}</div><div class="stat-label">Citas Total</div></div>
+        <div class="stat"><div class="stat-val">${d.kpis.citas_hoy||0}</div><div class="stat-label">Citas Hoy</div></div>
+        <div class="stat"><div class="stat-val">${d.kpis.citas_pendientes||0}</div><div class="stat-label">Pendientes</div></div>
+        <div class="stat"><div class="stat-val">${d.kpis.citas_activas||0}</div><div class="stat-label">Activas</div></div>
+        <div class="stat"><div class="stat-val">${d.kpis.conversaciones_unicas||0}</div><div class="stat-label">Conversaciones</div></div>
+        <div class="stat"><div class="stat-val">${d.kpis.servicios_activos||0}</div><div class="stat-label">Servicios</div></div>
+      `;
+      // Biz info
+      const t = d.tenant;
+      document.getElementById('bizInfo').innerHTML = `
+        <strong>Nombre:</strong> ${esc(t.business_name)}<br>
+        <strong>Slug:</strong> ${esc(t.slug)}<br>
+        <strong>Rubro:</strong> ${esc(t.rubro||'-')}<br>
+        <strong>WhatsApp:</strong> ${esc(t.whatsapp_number||'-')}<br>
+        <strong>Estado:</strong> <span class="badge ${t.status==='active'?'badge-green':t.status==='pending_approval'?'badge-yellow':'badge-red'}">${t.status}</span><br>
+        <strong>Instancia Evolution:</strong> ${esc(t.evolution_instance||'-')}<br>
+        <strong>Creado:</strong> ${esc(t.created_at||'-')}
+      `;
+    } else {
+      document.getElementById('content').innerHTML = `<div class="card" style="border-color:var(--danger);color:#fca5a5"><i class="fas fa-exclamation-triangle"></i> ${esc(d.error||'Error al cargar')}</div>`;
+    }
+  }).catch(e=>{
+    document.getElementById('content').innerHTML = `<div class="card" style="border-color:var(--danger);color:#fca5a5">Error de conexion: ${esc(e.message)}</div>`;
+  });
+}
+
+function loadCitas(){
+  const body = document.getElementById('citasBody');
+  body.innerHTML = '<tr><td colspan="7" class="empty"><div class="spinner"></div></td></tr>';
+  api(`/api/tenant/citas?t=${SLUG}`).then(d=>{
+    if(d.success && d.citas && d.citas.length){
+      body.innerHTML = d.citas.map(c=>`<tr>
+        <td>${esc(c.fecha_cita||'-')}</td>
+        <td>${esc(c.hora_cita||'-')}</td>
+        <td>${esc(c.nombre_cliente||'-')}</td>
+        <td>${esc(c.telefono||'-')}</td>
+        <td>${esc(c.servicio||'-')}</td>
+        <td>${esc(c.tipo_atencion||'-')}</td>
+        <td><span class="badge ${c.estado==='confirmada'?'badge-green':c.estado==='cancelada'?'badge-red':'badge-yellow'}">${esc(c.estado||'pendiente')}</span></td>
+      </tr>`).join('');
+    } else {
+      body.innerHTML = '<tr><td colspan="7" class="empty">No hay citas registradas</td></tr>';
+    }
+  });
+}
+
+function loadServicios(){
+  const body = document.getElementById('servBody');
+  body.innerHTML = '<tr><td colspan="6" class="empty"><div class="spinner"></div></td></tr>';
+  api(`/api/tenant/servicios?t=${SLUG}`).then(d=>{
+    if(d.success && d.servicios && d.servicios.length){
+      body.innerHTML = d.servicios.map(s=>`<tr>
+        <td>${esc(s.nombre)}</td>
+        <td>${esc(s.categoria||'General')}</td>
+        <td>$${s.precio||0}</td>
+        <td>${s.duracion_minutos||60} min</td>
+        <td><span class="badge ${s.activo?'badge-green':'badge-red'}">${s.activo?'Si':'No'}</span></td>
+        <td><button class="btn btn-outline btn-sm" onclick="toggleServ(${s.id},${s.activo?0:1})">${s.activo?'Desactivar':'Activar'}</button></td>
+      </tr>`).join('');
+    } else {
+      body.innerHTML = '<tr><td colspan="6" class="empty">No hay servicios</td></tr>';
+    }
+  });
+}
+
+function showServForm(){
+  const mc = document.getElementById('modalContainer');
+  mc.innerHTML = `<div class="modal-bg" onclick="if(event.target===this)closeModal()" style="position:fixed;inset:0;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;padding:20px"><div class="card" style="max-width:440px;width:100%"><h3 style="margin-bottom:16px"><i class="fas fa-plus"></i> Nuevo Servicio</h3><label>Nombre</label><input id="sNom" placeholder="Cambio de aceite"><label>Categoria</label><input id="sCat" placeholder="Mantencion"><label>Precio (CLP)</label><input id="sPre" type="number" value="0"><label>Duracion (minutos)</label><input id="sDur" type="number" value="60"><label>Descripcion</label><textarea id="sDesc" style="min-height:60px"></textarea><div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px"><button class="btn btn-outline" onclick="closeModal()">Cancelar</button><button class="btn btn-green" onclick="saveServ()">Crear</button></div></div></div>`;
+}
+function saveServ(){
+  const body = {
+    nombre: document.getElementById('sNom').value,
+    categoria: document.getElementById('sCat').value || 'General',
+    precio: parseInt(document.getElementById('sPre').value)||0,
+    duracion_minutos: parseInt(document.getElementById('sDur').value)||60,
+    descripcion: document.getElementById('sDesc').value
+  };
+  if(!body.nombre){ toast('Falta nombre','error'); return; }
+  api(`/api/tenant/servicios?t=${SLUG}`, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(d=>{
+    toast(d.success?'Servicio creado':(d.error||'Error'), d.success?'success':'error');
+    if(d.success){ closeModal(); loadServicios(); }
+  });
+}
+function toggleServ(id, val){
+  api(`/api/tenant/servicios?t=${SLUG}`, {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({id,activo:val})}).then(d=>{
+    if(d.success) loadServicios();
+    else toast(d.error||'Error','error');
+  });
+}
+
+function loadBotConfig(){
+  api(`/api/tenant/bot-status?t=${SLUG}`).then(d=>{
+    if(d.success){
+      const btn = document.getElementById('botToggleBtn');
+      if(d.bot_paused){
+        btn.innerHTML = '<i class="fas fa-play"></i> Reanudar Bot';
+        btn.className = 'btn btn-green btn-sm';
+      } else {
+        btn.innerHTML = '<i class="fas fa-pause"></i> Pausar Bot';
+        btn.className = 'btn btn-warn btn-sm';
+      }
+    }
+  });
+}
+function toggleBot(){
+  api(`/api/tenant/toggle-pause?t=${SLUG}`, {method:'POST'}).then(d=>{
+    toast(d.message||(d.success?'OK':'Error'), d.success?'success':'error');
+    loadBotConfig();
+  });
+}
+function saveAIConfig(){
+  toast('La configuracion de IA se gestiona desde SuperAdmin','success');
+}
+
+function copyUrl(id){
+  const text = document.getElementById(id).textContent;
+  navigator.clipboard.writeText(text).then(()=>toast('Enlace copiado','success'));
+}
+
+function closeModal(){ document.getElementById('modalContainer').innerHTML = ''; }
+
+init();
+</script>
+</body>
+</html>
