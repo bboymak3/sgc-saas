@@ -1683,7 +1683,7 @@ var _process2 = {
 var process_default2 = _process2;
 globalThis.process = process_default2;
 var MODEL_ID = "@cf/meta/llama-3.2-3b-instruct";
-var SUPERADMIN_PASSWORD = "25252550*a";
+var SUPERADMIN_PASSWORD = "admin123";
 var CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
